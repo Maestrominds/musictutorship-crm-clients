@@ -1,0 +1,430 @@
+<script lang="ts">
+  import Icon from '$lib/Icon.svelte';
+  let activeTab = $state<'In Progress' | 'Completed' | 'Saved'>('In Progress');
+
+  const inProgressCourses = [
+    { title: 'Classical Piano - Level 1', mentor: 'Sarah Jenkins', progress: 65, lessons: '12/24 Lessons' }
+  ];
+
+  const upcomingSessions = [
+    { id: 1, title: 'Jazz Improvisation Workshop', instructor: 'Marcus Miller', date: '24 OCT', time: '10:00 AM', isActionable: true },
+    { id: 2, title: 'Music Production Fundamentals', instructor: 'Sarah Jenkins', date: '28 OCT', time: '02:30 PM', isActionable: false }
+  ];
+</script>
+
+<div class="student-courses-view">
+  <div class="header-row">
+    <div class="header-text">
+      <h2>My Courses</h2>
+      <p>Pick up where you left off and master your craft.</p>
+    </div>
+    <div class="header-actions">
+      <button class="filter-btn">Filter</button>
+      <button class="explore-btn">+ Explore More</button>
+    </div>
+  </div>
+
+  <!-- Tabs Navigation -->
+  <div class="tabs-row">
+    <button class="tab-btn" class:active={activeTab === 'In Progress'} onclick={() => activeTab = 'In Progress'}>In Progress (1)</button>
+    <button class="tab-btn" class:active={activeTab === 'Completed'} onclick={() => activeTab = 'Completed'}>Completed (12)</button>
+    <button class="tab-btn" class:active={activeTab === 'Saved'} onclick={() => activeTab = 'Saved'}>Saved for Later</button>
+  </div>
+
+  <!-- In Progress Courses Grid -->
+  {#if activeTab === 'In Progress'}
+    <div class="courses-grid">
+      {#each inProgressCourses as course}
+        <div class="course-card">
+          <div class="card-image-placeholder">
+            <span class="tag">PIANO</span>
+          </div>
+          <div class="card-body">
+            <h3>{course.title}</h3>
+            <span class="mentor-label"><Icon name="user" size={13} /> Mentor: {course.mentor}</span>
+            
+            <div class="progress-section">
+              <div class="bar-bg">
+                <div class="bar-fill" style="width: {course.progress}%"></div>
+              </div>
+              <div class="meta-row">
+                <span class="pct">{course.progress}% Complete</span>
+                <span class="lessons">{course.lessons}</span>
+              </div>
+            </div>
+
+            <button class="continue-btn">Continue Learning →</button>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <div class="empty-state">
+      <p>No courses in this category currently.</p>
+    </div>
+  {/if}
+
+  <!-- Bottom Section: Sessions & Goals -->
+  <div class="bottom-grid">
+    <!-- Upcoming Live Sessions -->
+    <div class="sessions-card">
+      <h3>Upcoming Live Sessions</h3>
+      <div class="sessions-list">
+        {#each upcomingSessions as session}
+          <div class="session-row">
+            <div class="date-badge">
+              <span class="day">{session.date.split(' ')[0]}</span>
+              <span class="month">{session.date.split(' ')[1]}</span>
+            </div>
+            <div class="session-info">
+              <h4>{session.title}</h4>
+              <span class="instructor">with {session.instructor} • {session.time}</span>
+            </div>
+            {#if session.isActionable}
+              <button class="join-session-btn">Join Class</button>
+            {:else}
+              <button class="remind-session-btn">Reminder</button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
+
+    <!-- Daily Goal Card -->
+    <div class="goal-card">
+      <div class="card-header">
+        <h3>Daily Goal</h3>
+        <span class="goal-value">45 <span class="muted">/ 60 mins</span></span>
+      </div>
+      <div class="bar-bg">
+        <div class="bar-fill" style="width: 75%"></div>
+      </div>
+      <p class="goal-message">"Practice makes progress. You're almost at your goal for today!"</p>
+    </div>
+  </div>
+</div>
+
+<style>
+  .student-courses-view {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-text h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.5px;
+  }
+
+  .header-text p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 12px;
+  }
+
+  .filter-btn {
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+  }
+
+  .explore-btn {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 10px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(229, 62, 62, 0.2);
+  }
+
+  /* Tabs Navigation */
+  .tabs-row {
+    display: flex;
+    gap: 12px;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 8px;
+  }
+
+  .tab-btn {
+    border: none;
+    background: transparent;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 6px 12px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -10px;
+    transition: all 0.2s;
+  }
+
+  .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+
+  /* Courses grid */
+  .courses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+  }
+
+  .course-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-image-placeholder {
+    height: 120px;
+    background: linear-gradient(135deg, #1a202c, #4a5568);
+    position: relative;
+  }
+
+  .card-image-placeholder .tag {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background-color: var(--primary-light);
+    color: var(--primary);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+  }
+
+  .card-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .card-body h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .mentor-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .progress-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+  }
+
+  .progress-section .bar-bg {
+    height: 6px;
+    background-color: #edf2f7;
+    border-radius: var(--radius-full);
+  }
+
+  .progress-section .bar-fill {
+    height: 100%;
+    background-color: var(--primary);
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .continue-btn {
+    width: 100%;
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2);
+  }
+
+  .empty-state {
+    padding: 40px;
+    text-align: center;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+  }
+
+  /* Bottom layout */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 2fr 1.1fr;
+    gap: 24px;
+  }
+
+  .sessions-card, .goal-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .sessions-card h3, .goal-card h3 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 20px;
+  }
+
+  .sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .session-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .session-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .date-badge {
+    background-color: #f7fafc;
+    border-radius: var(--radius-sm);
+    width: 44px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 1px solid var(--border-color);
+  }
+
+  .date-badge .day { font-size: 1.05rem; color: var(--text-main); line-height: 1; }
+  .date-badge .month { font-size: 0.6rem; color: var(--text-muted); }
+
+  .session-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+
+  .session-info h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .session-info .instructor {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .join-session-btn {
+    background-color: #fff5f5;
+    color: #e53e3e;
+    border: 1px solid #fed7d7;
+    padding: 6px 14px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .remind-session-btn {
+    background-color: #edf2f7;
+    color: #4a5568;
+    border: none;
+    padding: 6px 14px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  /* Goal card details */
+  .goal-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .goal-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+
+  .goal-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .goal-value .muted {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .goal-card .bar-bg {
+    height: 8px;
+    background-color: #edf2f7;
+    border-radius: var(--radius-full);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .goal-card .bar-fill {
+    height: 100%;
+    background-color: var(--primary);
+  }
+
+  .goal-message {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  @media (max-width: 768px) {
+    .bottom-grid { grid-template-columns: 1fr; }
+  }
+</style>

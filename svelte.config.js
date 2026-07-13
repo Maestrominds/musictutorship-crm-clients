@@ -1,0 +1,14 @@
+import adapter from '@sveltejs/adapter-static';
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+  kit: {
+    // adapter-static: SPA mode — Go backend serves the built files
+    // fallback: 'index.html' enables client-side routing for all routes
+    adapter: adapter({
+      fallback: 'index.html'
+    })
+  }
+};
+
+export default config;
