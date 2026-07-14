@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PUBLIC_API_URL } from '$env/static/public';
   import { goto } from '$app/navigation';
   import Icon from '$lib/Icon.svelte';
 
@@ -35,7 +36,7 @@
     isLoading = true;
 
     try {
-      const res = await fetch('/api/v1/login', {
+      const res = await fetch(`${PUBLIC_API_URL || ''}/api/v1/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
