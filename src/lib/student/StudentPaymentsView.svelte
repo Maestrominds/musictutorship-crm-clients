@@ -11,25 +11,20 @@
 
   let { dashboardData = null } = $props();
 
+  // NOTE: GET /api/student/payments is not yet implemented. See backend_dev_todo.md #13
+  // Using dashboardData.recent_payments if available
   const dbPayments = $derived(
     dashboardData?.recent_payments?.map((p: any) => ({
       id: p.id,
       courseName: 'Course Tuition',
       amount: `$${p.amount}`,
       method: 'Online Payment',
-      status: 'Paid',
+      status: 'Paid' as const,
       date: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'
     })) || []
   );
 
-  const mockPayments: StudentPayment[] = [
-    { id: 1, courseName: 'Classical Piano Fundamentals', amount: '$150.00', method: 'Visa ending in 4242', status: 'Paid', date: 'Sep 15, 2023' },
-    { id: 2, courseName: 'Classical Piano Fundamentals', amount: '$150.00', method: 'Visa ending in 4242', status: 'Paid', date: 'Aug 15, 2023' },
-    { id: 3, courseName: 'Classical Piano Fundamentals', amount: '$150.00', method: 'Visa ending in 4242', status: 'Paid', date: 'Jul 15, 2023' },
-    { id: 4, courseName: 'Classical Piano Fundamentals', amount: '$150.00', method: 'Visa ending in 4242', status: 'Paid', date: 'Jun 15, 2023' }
-  ];
-
-  const payments = $derived(dbPayments.length > 0 ? dbPayments : mockPayments);
+  const payments = $derived(dbPayments);
 </script>
 
 

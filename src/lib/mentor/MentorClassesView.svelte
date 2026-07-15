@@ -1,5 +1,20 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
+
+  interface ApiClass {
+    id: number;
+    course_assignment_id: number;
+    scheduled_at: string;
+    is_catchup: boolean;
+    gmeet_link: string | null;
+    created_at: string;
+    course_title?: string;
+    student_name?: string;
+    student_id?: number;
+  }
+
   interface TeachingClass {
     id: number;
     studentName: string;
@@ -13,13 +28,40 @@
     hasFeedback: boolean;
   }
 
-  // Writable teaching classes state using Svelte 5 state
-  let classes = $state<TeachingClass[]>([
-    { id: 1, studentName: 'Alex Johnson', studentId: '#9821', course: 'Piano Fundamentals', courseLevel: 'Advanced Level', dateTime: 'Oct 24, 2023, 10:00 AM - 11:30 AM', meetingType: 'Join', meetingLink: 'https://zoom.us', status: 'Upcoming', hasFeedback: false },
-    { id: 2, studentName: 'Maria Garcia', studentId: '#7742', course: 'Vocal Training', courseLevel: 'Intermediate', dateTime: 'Oct 24, 2023, 02:00 PM - 03:00 PM', meetingType: 'JoinActive', meetingLink: 'https://zoom.us', status: 'In Progress', hasFeedback: false },
-    { id: 3, studentName: 'James Wilson', studentId: '#9011', course: 'Guitar Mastery', courseLevel: 'Pro Course', dateTime: 'Oct 23, 2023, 11:00 AM - 12:00 PM', meetingType: 'Recording', meetingLink: 'https://zoom.us', status: 'Completed', hasFeedback: true },
-    { id: 4, studentName: 'Sarah Lee', studentId: '#1009', course: 'Violin Intro', courseLevel: 'Beginner', dateTime: 'Oct 25, 2023, 09:00 AM - 10:00 AM', meetingType: 'Join', meetingLink: 'https://zoom.us', status: 'Upcoming', hasFeedback: false }
-  ]);
+  let classes = $state<TeachingClass[]>([]);
+  let isLoading = $state(true);
+  let errorMsg = $state('');
+
+  function mapApiClass(c: ApiClass): TeachingClass {
+    const scheduledDate = new Date(c.scheduled_at);
+    const now = new Date();
+    let status: 'Upcoming' | 'In Progress' | 'Completed' = 'Upcoming';
+    if (scheduledDate < now) status = 'Completed';
+
+    return {
+      id: c.id,
+      studentName: c.student_name || 'Student',
+      studentId: c.student_id ? `#${c.student_id}` : `#${c.course_assignment_id}`,
+      course: c.course_title || 'Music Course',
+      courseLevel: c.is_catchup ? 'Catch-up' : 'Regular',
+      dateTime: scheduledDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
+      meetingType: c.gmeet_link ? (status === 'Completed' ? 'Recording' : 'JoinActive') : 'Join',
+      meetingLink: c.gmeet_link || '#',
+      status,
+      hasFeedback: false
+    };
+  }
+
+  onMount(async () => {
+    try {
+      const data = await apiGet<ApiClass[]>('/mentor/classes');
+      classes = (data || []).map(mapApiClass);
+    } catch (err) {
+      errorMsg = err instanceof Error ? err.message : 'Failed to load classes';
+    } finally {
+      isLoading = false;
+    }
+  });
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -42,6 +84,11 @@
   </div>
 
   <div class="table-card">
+    {#if isLoading}
+      <div class="empty-state"><p>Loading classes...</p></div>
+    {:else if errorMsg}
+      <div class="empty-state error"><p>⚠️ {errorMsg}</p></div>
+    {:else}
     <table class="classes-table">
       <thead>
         <tr>
@@ -54,6 +101,9 @@
         </tr>
       </thead>
       <tbody>
+        {#if classes.length === 0}
+          <tr><td colspan="6" class="empty-cell">No classes scheduled yet.</td></tr>
+        {/if}
         {#each classes as item}
           <tr>
             <td class="student-cell">
@@ -111,17 +161,9 @@
     </table>
 
     <div class="table-footer">
-      <span class="results-count">Showing 1-{classes.length} of 24 classes</span>
-      <div class="pagination">
-        <button class="pag-btn prev">◀</button>
-        <button class="pag-btn active">1</button>
-        <button class="pag-btn">2</button>
-        <button class="pag-btn">3</button>
-        <span class="pag-dots">...</span>
-        <button class="pag-btn">9</button>
-        <button class="pag-btn next">▶</button>
-      </div>
+      <span class="results-count">Showing {classes.length} class{classes.length !== 1 ? 'es' : ''}</span>
     </div>
+    {/if}
   </div>
 
   <div class="classes-stats-grid">

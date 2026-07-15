@@ -1,5 +1,8 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import { onMount } from 'svelte';
+  import { apiGet, apiPost } from '$lib/api';
+
   interface AttendanceRecord {
     id: number;
     studentName: string;
@@ -8,38 +11,63 @@
     status: 'Present' | 'Absent' | 'Excused';
   }
 
-  let records = $state<AttendanceRecord[]>([
-    { id: 1, studentName: 'Benjamin Chen', course: 'Classical Piano II', classDate: 'Oct 24, 2023', status: 'Present' },
-    { id: 2, studentName: 'Elena Rodriguez', course: 'Music Theory Basics', classDate: 'Oct 24, 2023', status: 'Absent' },
-    { id: 3, studentName: 'Marcus Thompson', course: 'Jazz Improvisation', classDate: 'Oct 23, 2023', status: 'Excused' },
-    { id: 4, studentName: 'Sarah Jenkins', course: 'Classical Piano II', classDate: 'Oct 23, 2023', status: 'Present' },
-    { id: 5, studentName: 'Leo Vance', course: 'Jazz Improvisation', classDate: 'Oct 23, 2023', status: 'Present' }
-  ]);
+  let records = $state<AttendanceRecord[]>([]);
+  let isLoading = $state(true);
+  let errorMsg = $state('');
 
   let showMarkModal = $state(false);
-  let newStudent = $state('Benjamin Chen');
-  let newCourse = $state('Classical Piano II');
-  let newStatus = $state<'Present' | 'Absent' | 'Excused'>('Present');
+  let newClassId = $state(0);
+  let newStudentId = $state(0);
+  let newStatus = $state<'present' | 'absent' | 'excused'>('present');
+  let isSubmitting = $state(false);
+  let submitError = $state('');
 
-  function openModal() {
-    showMarkModal = true;
-  }
+  // NOTE: GET /api/mentor/attendance is not yet implemented. See backend_dev_todo.md #10
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/mentor/attendance');
+      records = (data || []).map(r => ({
+        id: r.id,
+        studentName: r.student_name || 'Student',
+        course: r.course_title || 'Music Course',
+        classDate: r.class_date ? new Date(r.class_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
+        status: (r.status.charAt(0).toUpperCase() + r.status.slice(1)) as 'Present' | 'Absent' | 'Excused'
+      }));
+    } catch (err) {
+      // Endpoint not yet available — show empty list
+      errorMsg = '';
+    } finally {
+      isLoading = false;
+    }
+  });
 
-  function closeModal() {
-    showMarkModal = false;
-  }
+  function openModal() { showMarkModal = true; }
+  function closeModal() { showMarkModal = false; submitError = ''; }
 
-  function addRecord(e: SubmitEvent) {
+  async function addRecord(e: SubmitEvent) {
     e.preventDefault();
-    const newRec: AttendanceRecord = {
-      id: Date.now(),
-      studentName: newStudent,
-      course: newCourse,
-      classDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      status: newStatus
-    };
-    records = [newRec, ...records];
-    closeModal();
+    isSubmitting = true;
+    submitError = '';
+    try {
+      await apiPost('/mentor/attendance', {
+        class_id: newClassId,
+        student_id: newStudentId,
+        status: newStatus
+      });
+      // Optimistically add to local list
+      records = [{
+        id: Date.now(),
+        studentName: `Student #${newStudentId}`,
+        course: `Class #${newClassId}`,
+        classDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        status: (newStatus.charAt(0).toUpperCase() + newStatus.slice(1)) as 'Present' | 'Absent' | 'Excused'
+      }, ...records];
+      closeModal();
+    } catch (err) {
+      submitError = err instanceof Error ? err.message : 'Failed to mark attendance';
+    } finally {
+      isSubmitting = false;
+    }
   }
 
   function getInitials(name: string) {
@@ -56,23 +84,21 @@
   </div>
 
   <!-- Stats row -->
+  <!-- NOTE: GET /api/mentor/stats required for real stats — see backend_dev_todo.md #11 -->
   <div class="stats-row">
     <div class="stat-card">
-      <span class="trend positive">+12%</span>
-      <div class="value">128</div>
-      <span class="label">Total Classes Conducted</span>
+      <div class="value">{records.filter(r => r.status === 'Present').length || '—'}</div>
+      <span class="label">Total Present</span>
     </div>
     
     <div class="stat-card">
-      <span class="trend negative">-2%</span>
-      <div class="value">94.2%</div>
-      <span class="label">Average Attendance Rate</span>
+      <div class="value">{records.filter(r => r.status === 'Absent').length || '—'}</div>
+      <span class="label">Total Absent</span>
     </div>
 
     <div class="stat-card">
-      <span class="trend positive">+1%</span>
-      <div class="value">5</div>
-      <span class="label">Students with Low Attendance</span>
+      <div class="value">{records.filter(r => r.status === 'Excused').length || '—'}</div>
+      <span class="label">Excused</span>
     </div>
   </div>
 
@@ -96,6 +122,11 @@
         </tr>
       </thead>
       <tbody>
+        {#if isLoading}
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:#999;">Loading attendance records...</td></tr>
+        {:else if records.length === 0}
+          <tr><td colspan="5" style="text-align:center;padding:24px;color:#999;">No attendance records yet. Mark a new record above.</td></tr>
+        {/if}
         {#each records as record}
           <tr>
             <td class="student-cell">

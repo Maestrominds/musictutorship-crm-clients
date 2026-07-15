@@ -1,17 +1,49 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
-  // Mock data for classes and activity matching the screenshot
-  const upcomingClasses = [
-    { name: 'Alex Johnson', initials: 'AJ', course: 'Piano Grade 1', dateTime: 'Oct 24, 2023, 10:00 AM', isActionable: true },
-    { name: 'Sarah Smith', initials: 'SS', course: 'Vocal Basics', dateTime: 'Oct 24, 2023, 02:00 PM', isActionable: true },
-    { name: 'Michael Brown', initials: 'MB', course: 'Guitar Intermediate', dateTime: 'Oct 25, 2023, 11:30 AM', isActionable: false }
-  ];
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
 
-  const recentActivities = [
-    { name: 'Esther Howard', level: 'Violin Beginners - Level 3', progress: 78, time: '2h ago', lastActive: 'Oct 22', status: 'In Progress' },
-    { name: 'Cody Fisher', level: 'Drum Fundamentals', progress: 43, time: '6h ago', lastActive: 'Oct 21', status: 'In Progress' },
-    { name: 'Arlene McCoy', level: 'Music Theory I', progress: 100, time: '1d ago', lastActive: 'Oct 20', status: 'Completed' }
-  ];
+  interface ApiClass {
+    id: number;
+    scheduled_at: string;
+    gmeet_link: string | null;
+    course_title?: string;
+    student_name?: string;
+    student_initials?: string;
+  }
+
+  let upcomingClasses = $state<{ name: string; initials: string; course: string; dateTime: string; isActionable: boolean }[]>([]);
+  let stats = $state({ assignedStudents: 0, upcomingCount: 0, completedCount: 0 });
+  let isLoading = $state(true);
+
+  // NOTE: GET /api/mentor/stats is not yet implemented. See backend_dev_todo.md #11
+  onMount(async () => {
+    try {
+      const data = await apiGet<ApiClass[]>('/mentor/classes');
+      const classes = data || [];
+      const now = new Date();
+
+      upcomingClasses = classes
+        .filter(c => new Date(c.scheduled_at) >= now)
+        .slice(0, 5)
+        .map(c => ({
+          name: c.student_name || 'Student',
+          initials: c.student_name ? c.student_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'ST',
+          course: c.course_title || 'Music Course',
+          dateTime: new Date(c.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
+          isActionable: !!c.gmeet_link
+        }));
+
+      stats.upcomingCount = classes.filter(c => new Date(c.scheduled_at) >= now).length;
+      stats.completedCount = classes.filter(c => new Date(c.scheduled_at) < now).length;
+    } catch (err) {
+      // Graceful fallback — stats remain 0
+    } finally {
+      isLoading = false;
+    }
+  });
+
+  // NOTE: recentActivities requires GET /api/mentor/students — see backend_dev_todo.md #9
 </script>
 
 <div class="mentor-dash-view">
@@ -21,7 +53,8 @@
       <div class="stat-icon red-bg"><Icon name="graduation" size={20} /></div>
       <div class="stat-info">
         <span class="label">Assigned Students</span>
-        <div class="value">24</div>
+        <!-- NOTE: requires GET /api/mentor/stats — see backend_dev_todo.md #11 -->
+        <div class="value">{stats.assignedStudents || '—'}</div>
       </div>
     </div>
 
@@ -29,7 +62,7 @@
       <div class="stat-icon green-bg"><Icon name="calendar" size={20} /></div>
       <div class="stat-info">
         <span class="label">Upcoming Classes</span>
-        <div class="value">8</div>
+        <div class="value">{stats.upcomingCount}</div>
       </div>
     </div>
 
@@ -37,7 +70,7 @@
       <div class="stat-icon orange-bg"><Icon name="check-circle" size={20} /></div>
       <div class="stat-info">
         <span class="label">Completed Classes</span>
-        <div class="value">142</div>
+        <div class="value">{stats.completedCount}</div>
       </div>
     </div>
   </section>
@@ -78,6 +111,9 @@
               </td>
             </tr>
           {/each}
+          {#if upcomingClasses.length === 0 && !isLoading}
+            <tr><td colspan="4" class="empty-cell">No upcoming classes. Schedule one from My Classes tab.</td></tr>
+          {/if}
         </tbody>
       </table>
     </div>
@@ -88,8 +124,10 @@
         <h3>Recent Activity</h3>
       </div>
 
+      <!-- NOTE: Student progress/activity requires GET /api/mentor/students — see backend_dev_todo.md #9 -->
       <div class="activity-list">
-        {#each recentActivities as act}
+        <div class="empty-state-inline"><p>Student activity data coming soon.</p></div>
+        {#each [] as act}
           <div class="activity-item">
             <div class="avatar-circle"><Icon name="user" size={18} /></div>
             <div class="activity-details">

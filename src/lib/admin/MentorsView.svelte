@@ -1,15 +1,22 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
-  import { onDestroy } from 'svelte';
-  import { mentorsStore, type Mentor } from '../dataStore';
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
+  import type { Mentor } from '../dataStore';
 
-  let mentors: Mentor[] = $state([]);
-  const unsubscribe = mentorsStore.subscribe((val) => {
-    mentors = val;
-  });
+  let mentors = $state<Mentor[]>([]);
+  let isLoading = $state(true);
 
-  onDestroy(() => {
-    unsubscribe();
+  // NOTE: GET /api/admin/mentors is not yet implemented. See backend_dev_todo.md #4
+  onMount(async () => {
+    try {
+      const data = await apiGet<Mentor[]>('/admin/mentors');
+      mentors = data || [];
+    } catch {
+      mentors = []; // Not yet available — show empty state
+    } finally {
+      isLoading = false;
+    }
   });
 
   let filterDept = $state('All');

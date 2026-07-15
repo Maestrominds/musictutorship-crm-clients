@@ -3,8 +3,8 @@
 
   let { dashboardData = null } = $props();
 
-  const dbUpcoming = $derived(
-    dashboardData?.upcoming_classes?.map((c: any) => ({
+  const upcomingClasses = $derived(
+    (dashboardData?.upcoming_classes || []).map((c: any) => ({
       id: c.id,
       name: c.title || 'Music Session',
       mentor: c.mentor_name || 'Assigned Mentor',
@@ -13,22 +13,13 @@
       statusClass: c.gmeet_link ? 'starts-soon' : 'scheduled',
       isJoinable: !!c.gmeet_link,
       gmeet_link: c.gmeet_link
-    })) || []
+    }))
   );
 
-  const mockUpcoming = [
-    { id: 1, name: 'Piano Mastery: Classical Era', mentor: 'Mr. Robert Chen', dateTime: 'Oct 24, 2023, 10:00 AM - 11:30 AM', status: 'Starts Soon', statusClass: 'starts-soon', isJoinable: true, gmeet_link: 'https://meet.google.com' },
-    { id: 2, name: 'Jazz Improvisation', mentor: 'Sarah Jenkins', dateTime: 'Oct 25, 2023, 02:00 PM - 03:30 PM', status: 'Scheduled', statusClass: 'scheduled', isJoinable: false, gmeet_link: null }
-  ];
-
-  const upcomingClasses = $derived(dbUpcoming.length > 0 ? dbUpcoming : mockUpcoming);
-
-  const pastClasses = [
-    { title: 'Music Theory 101: Notation', focus: 'Sight reading & time signatures', mentor: 'Prof. Alan Turing', date: 'Oct 20, 2023' },
-    { title: 'Vocal Warmups & Hygiene', focus: 'Range extension techniques', mentor: 'Elena Albert', date: 'Oct 18, 2023' },
-    { title: 'Introduction to DAWs', focus: 'Ableton Live basics', mentor: 'Marcus Vane', date: 'Oct 15, 2023' }
-  ];
+  // NOTE: GET /api/student/past-classes is not yet implemented. See backend_dev_todo.md #14
+  const pastClasses: { title: string; focus: string; mentor: string; date: string }[] = [];
 </script>
+
 
 
 <div class="student-schedule-view">

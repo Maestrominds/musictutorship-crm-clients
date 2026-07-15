@@ -1,54 +1,75 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
-  import { onDestroy } from 'svelte';
-  import { coursesStore, type Course } from '../dataStore';
+  import { onMount } from 'svelte';
+  import { apiGet, apiPost } from '$lib/api';
+  import type { Course } from '../dataStore';
 
-  let courses: Course[] = $state([]);
-  const unsubscribe = coursesStore.subscribe((val) => {
-    courses = val;
-  });
+  let courses = $state<Course[]>([]);
+  let isLoading = $state(true);
 
-  onDestroy(() => {
-    unsubscribe();
+  // NOTE: GET /api/admin/courses is not yet implemented. See backend_dev_todo.md #5
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/admin/courses');
+      courses = (data || []).map(c => ({
+        id: c.id,
+        name: c.title,
+        description: c.description,
+        price: `$${c.price}/mo`,
+        duration: '',
+        mentorName: '',
+        isPremium: true
+      }));
+    } catch {
+      courses = []; // Not yet available — show empty state
+    } finally {
+      isLoading = false;
+    }
   });
 
   let showModal = $state(false);
   let newName = $state('');
   let newDescription = $state('');
-  let newPrice = $state('$150/mo');
+  let newPrice = $state('150');
   let newDuration = $state('3 Months');
-  let newMentor = $state('Alex Rivers');
+  let newMentor = $state('');
+  let isSubmitting = $state(false);
+  let submitError = $state('');
 
-  function openModal() {
-    showModal = true;
-  }
+  function openModal() { showModal = true; }
+  function closeModal() { showModal = false; newName = ''; newDescription = ''; submitError = ''; }
 
-  function closeModal() {
-    showModal = false;
-    newName = '';
-    newDescription = '';
-  }
-
-  function createCourse(e: SubmitEvent) {
+  async function createCourse(e: SubmitEvent) {
     e.preventDefault();
     if (!newName || !newDescription) return;
-
-    const newCourse: Course = {
-      id: Date.now(),
-      name: newName,
-      description: newDescription,
-      price: newPrice,
-      duration: newDuration,
-      mentorName: newMentor,
-      isPremium: true
-    };
-
-    coursesStore.update((list) => [...list, newCourse]);
-    closeModal();
+    isSubmitting = true;
+    submitError = '';
+    try {
+      await apiPost('/admin/courses', {
+        title: newName,
+        description: newDescription,
+        price: parseFloat(newPrice)
+      });
+      // Optimistically add
+      courses = [...courses, {
+        id: Date.now(),
+        name: newName,
+        description: newDescription,
+        price: `$${newPrice}/mo`,
+        duration: newDuration,
+        mentorName: newMentor,
+        isPremium: true
+      }];
+      closeModal();
+    } catch (err) {
+      submitError = err instanceof Error ? err.message : 'Failed to create course';
+    } finally {
+      isSubmitting = false;
+    }
   }
 
   function removeCourse(id: number) {
-    coursesStore.update((list) => list.filter(c => c.id !== id));
+    courses = courses.filter(c => c.id !== id);
   }
 </script>
 

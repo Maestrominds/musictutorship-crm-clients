@@ -1,15 +1,33 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
-  import { onDestroy } from 'svelte';
-  import { studentsStore, type Student } from '../dataStore';
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
+  import type { Student } from '../dataStore';
 
-  let students: Student[] = $state([]);
-  const unsubscribe = studentsStore.subscribe((val) => {
-    students = val;
-  });
+  let students = $state<Student[]>([]);
+  let isLoading = $state(true);
 
-  onDestroy(() => {
-    unsubscribe();
+  // NOTE: GET /api/admin/payments is not yet implemented. See backend_dev_todo.md #6
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/admin/payments');
+      students = (data || []).map(p => ({
+        id: p.id,
+        name: p.student_name || 'Student',
+        email: '',
+        course: p.course_title || 'Course Tuition',
+        mentor: '',
+        enrollmentDate: '',
+        paymentStatus: 'Paid' as const,
+        amount: `$${p.amount}`,
+        paymentMethod: 'Online Payment',
+        paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
+      }));
+    } catch {
+      students = []; // Not yet available — show empty state
+    } finally {
+      isLoading = false;
+    }
   });
 
   let activeTab = $state<'All' | 'Paid' | 'Pending' | 'Failed'>('All');

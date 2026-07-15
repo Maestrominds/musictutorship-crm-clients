@@ -1,5 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import { onMount } from 'svelte';
+  import { apiGet, apiPost } from '$lib/api';
 
   interface Lead {
     id: number;
@@ -11,14 +13,9 @@
     createdDate: string;
   }
 
-  // Initial mock data list in Svelte 5 state
-  let leads = $state<Lead[]>([
-    { id: 1, name: 'Alice Schmidt', phone: '+1 (555) 012-3456', email: 'alice.s@example.com', course: 'Classical Piano', status: 'New', createdDate: 'Oct 24, 2023' },
-    { id: 2, name: 'Alice Schmidt', phone: '+1 (555) 012-3456', email: 'alice.s@example.com', course: 'Classical Piano', status: 'New', createdDate: 'Oct 24, 2023' },
-    { id: 3, name: 'Alice Schmidt', phone: '+1 (555) 012-3456', email: 'alice.s@example.com', course: 'Classical Piano', status: 'New', createdDate: 'Oct 24, 2023' },
-    { id: 4, name: 'Alice Schmidt', phone: '+1 (555) 012-3456', email: 'alice.s@example.com', course: 'New', status: 'New', createdDate: 'Oct 24, 2023' },
-    { id: 5, name: 'Alice Schmidt', phone: '+1 (555) 012-3456', email: 'alice.s@example.com', course: 'Classical Piano', status: 'New', createdDate: 'Oct 24, 2023' }
-  ]);
+  let leads = $state<Lead[]>([]);
+  let isLoading = $state(true);
+  let errorMsg = $state('');
 
   // Form inputs for adding a lead
   let showAddModal = $state(false);
@@ -26,6 +23,8 @@
   let newLeadEmail = $state('');
   let newLeadPhone = $state('');
   let newLeadCourse = $state('Classical Piano');
+  let isSubmitting = $state(false);
+  let submitError = $state('');
 
   // Filter inputs
   let searchQuery = $state('');
@@ -46,6 +45,25 @@
     })
   );
 
+  // NOTE: GET /api/admin/leads is not yet implemented by backend.
+  // See backend_dev_todo.md — item #2.
+  onMount(async () => {
+    try {
+      const data = await apiGet<Lead[]>('/admin/leads');
+      leads = (data || []).map(l => ({
+        ...l,
+        createdDate: l.createdDate
+          ? new Date(l.createdDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : 'N/A'
+      }));
+    } catch (err) {
+      // Endpoint not yet available — show empty list
+      errorMsg = '';
+    } finally {
+      isLoading = false;
+    }
+  });
+
   function openModal() {
     showAddModal = true;
   }
@@ -56,24 +74,34 @@
     newLeadEmail = '';
     newLeadPhone = '';
     newLeadCourse = 'Classical Piano';
+    submitError = '';
   }
 
-  function addLead(e: SubmitEvent) {
+  async function addLead(e: SubmitEvent) {
     e.preventDefault();
-    if (!newLeadName || !newLeadEmail || !newLeadPhone) return;
+    if (!newLeadName || !newLeadEmail) return;
 
-    const newLead: Lead = {
-      id: Date.now(),
-      name: newLeadName,
-      phone: newLeadPhone,
-      email: newLeadEmail,
-      course: newLeadCourse,
-      status: 'New',
-      createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    };
-
-    leads = [newLead, ...leads];
-    closeModal();
+    isSubmitting = true;
+    submitError = '';
+    try {
+      await apiPost('/leads', { name: newLeadName, email: newLeadEmail });
+      // Optimistically add to local list
+      const newLead: Lead = {
+        id: Date.now(),
+        name: newLeadName,
+        phone: newLeadPhone,
+        email: newLeadEmail,
+        course: newLeadCourse,
+        status: 'New',
+        createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      };
+      leads = [newLead, ...leads];
+      closeModal();
+    } catch (err) {
+      submitError = err instanceof Error ? err.message : 'Failed to add lead';
+    } finally {
+      isSubmitting = false;
+    }
   }
 
   function getInitials(name: string) {

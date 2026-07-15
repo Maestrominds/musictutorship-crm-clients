@@ -32,11 +32,8 @@
     dashboardData?.upcoming_classes?.[0]?.mentor_name || 'Prof. Alex Johnson'
   );
 
-  const activities = [
-    { type: 'Last lesson viewed', detail: 'Intro to Chords', time: '2 hours ago', color: 'red' },
-    { type: 'Recent class attended', detail: 'Piano Basics II', time: 'Oct 24, 2023', color: 'green' },
-    { type: 'Assignment Submitted', detail: 'Scale Practice Video', time: 'Oct 22, 2023', color: 'blue' }
-  ];
+  // NOTE: activities require GET /api/student/activity — not yet implemented (see backend_dev_todo.md)
+  const activities: { type: string; detail: string; time: string; color: string }[] = [];
 </script>
 
 <div class="student-dash-view">
@@ -62,7 +59,8 @@
       <div class="stat-icon green-bg"><Icon name="trending-up" size={20} /></div>
       <div class="stat-info">
         <span class="label">COURSE PROGRESS</span>
-        <div class="value">65%</div>
+        <!-- NOTE: requires GET /api/student/courses — see backend_dev_todo.md #12 -->
+        <div class="value">{dashboardData?.progress_percent != null ? `${dashboardData.progress_percent}%` : '—'}</div>
       </div>
     </div>
   </section>

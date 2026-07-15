@@ -1,42 +1,46 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
-  import { onDestroy } from 'svelte';
-  import { studentsStore, type Student } from '../dataStore';
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
 
-  let students: Student[] = $state([]);
-  const unsubscribe = studentsStore.subscribe((val) => {
-    // Show all students for prototype richness, but prioritize showing progress
-    students = val;
+  interface MentorStudent {
+    id: number;
+    name: string;
+    email: string;
+    course: string;
+    progress: number;
+    nextClass: string;
+  }
+
+  let students = $state<MentorStudent[]>([]);
+  let isLoading = $state(true);
+
+  // NOTE: GET /api/mentor/students is not yet implemented. See backend_dev_todo.md #9
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/mentor/students');
+      students = (data || []).map(s => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        course: s.course_title || 'Music Course',
+        progress: s.progress_percent || 0,
+        nextClass: s.next_class_at
+          ? new Date(s.next_class_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+          : 'Not scheduled'
+      }));
+    } catch {
+      students = []; // Not yet available — show empty state
+    } finally {
+      isLoading = false;
+    }
   });
-
-  onDestroy(() => {
-    unsubscribe();
-  });
-
-  // Mock progress database mapped to names for this view
-  const progressMap: Record<string, number> = {
-    'John Doe': 78,
-    'Sarah Jenkins': 43,
-    'Michael Chen': 65,
-    'Emily White': 90,
-    'Daniel Lee': 75,
-    'Sophia Garcia': 82
-  };
-
-  const nextClassMap: Record<string, string> = {
-    'John Doe': 'Oct 24, 2023, 10:00 AM',
-    'Sarah Jenkins': 'Oct 24, 2023, 02:00 PM',
-    'Michael Chen': 'Oct 25, 2023, 11:30 AM',
-    'Emily White': 'Oct 26, 2023, 09:00 AM',
-    'Daniel Lee': 'Oct 26, 2023, 04:00 PM',
-    'Sophia Garcia': 'Oct 27, 2023, 10:00 AM'
-  };
 
   let searchQuery = $state('');
   let filteredStudents = $derived(
-    students.filter(student => 
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      student.course.toLowerCase().includes(searchQuery.toLowerCase())
+    students.filter(s =>
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.course.toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
 
@@ -77,9 +81,11 @@
         </tr>
       </thead>
       <tbody>
-        {#if filteredStudents.length === 0}
+        {#if isLoading}
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:#999;">Loading students...</td></tr>
+        {:else if filteredStudents.length === 0}
           <tr>
-            <td colspan="6" class="empty-row">No students found.</td>
+            <td colspan="6" class="empty-row">No students assigned yet. The backend endpoint is pending — see backend_dev_todo.md #9.</td>
           </tr>
         {:else}
           {#each filteredStudents as student}
@@ -94,16 +100,16 @@
               <td>
                 <span class="course-badge">{student.course}</span>
               </td>
-              <td class="date-text">{student.enrollmentDate}</td>
+              <td class="date-text">{student.email || '—'}</td>
               <td>
                 <div class="progress-container">
                   <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" style="width: {progressMap[student.name] || 50}%"></div>
+                    <div class="progress-bar-fill" style="width: {student.progress}%"></div>
                   </div>
-                  <span class="pct">{progressMap[student.name] || 50}%</span>
+                  <span class="pct">{student.progress}%</span>
                 </div>
               </td>
-              <td class="next-class-text">{nextClassMap[student.name] || 'Not Scheduled'}</td>
+              <td class="next-class-text">{student.nextClass}</td>
               <td>
                 <div class="actions-row">
                   <button class="action-btn" title="View Progress"><Icon name="eye" size={14} /></button>

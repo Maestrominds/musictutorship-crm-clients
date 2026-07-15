@@ -1,15 +1,41 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
+
   let activeTab = $state<'In Progress' | 'Completed' | 'Saved'>('In Progress');
 
-  const inProgressCourses = [
-    { title: 'Classical Piano - Level 1', mentor: 'Sarah Jenkins', progress: 65, lessons: '12/24 Lessons' }
-  ];
+  interface StudentCourse {
+    id: number;
+    title: string;
+    mentor: string;
+    progress: number;
+    totalLessons: number;
+    completedLessons: number;
+  }
 
-  const upcomingSessions = [
-    { id: 1, title: 'Jazz Improvisation Workshop', instructor: 'Marcus Miller', date: '24 OCT', time: '10:00 AM', isActionable: true },
-    { id: 2, title: 'Music Production Fundamentals', instructor: 'Sarah Jenkins', date: '28 OCT', time: '02:30 PM', isActionable: false }
-  ];
+  let inProgressCourses = $state<StudentCourse[]>([]);
+  let upcomingSessions = $state<{ id: number; title: string; instructor: string; date: string; time: string; isActionable: boolean }[]>([]);
+  let isLoading = $state(true);
+
+  // NOTE: GET /api/student/courses is not yet implemented. See backend_dev_todo.md #12
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/student/courses');
+      inProgressCourses = (data || []).map(c => ({
+        id: c.id,
+        title: c.course_title,
+        mentor: c.mentor_name || 'Assigned Mentor',
+        progress: c.progress_percent || 0,
+        totalLessons: c.total_lessons || 0,
+        completedLessons: c.completed_lessons || 0
+      }));
+    } catch {
+      inProgressCourses = []; // Not yet available — show empty state
+    } finally {
+      isLoading = false;
+    }
+  });
 </script>
 
 <div class="student-courses-view">
@@ -26,18 +52,23 @@
 
   <!-- Tabs Navigation -->
   <div class="tabs-row">
-    <button class="tab-btn" class:active={activeTab === 'In Progress'} onclick={() => activeTab = 'In Progress'}>In Progress (1)</button>
-    <button class="tab-btn" class:active={activeTab === 'Completed'} onclick={() => activeTab = 'Completed'}>Completed (12)</button>
+    <button class="tab-btn" class:active={activeTab === 'In Progress'} onclick={() => activeTab = 'In Progress'}>In Progress ({inProgressCourses.length})</button>
+    <button class="tab-btn" class:active={activeTab === 'Completed'} onclick={() => activeTab = 'Completed'}>Completed</button>
     <button class="tab-btn" class:active={activeTab === 'Saved'} onclick={() => activeTab = 'Saved'}>Saved for Later</button>
   </div>
 
   <!-- In Progress Courses Grid -->
   {#if activeTab === 'In Progress'}
+    {#if isLoading}
+      <div style="text-align:center;padding:40px;color:#999;">Loading your courses...</div>
+    {:else if inProgressCourses.length === 0}
+      <div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">No courses enrolled yet. The backend endpoint is pending — see backend_dev_todo.md #12.</div>
+    {:else}
     <div class="courses-grid">
       {#each inProgressCourses as course}
         <div class="course-card">
           <div class="card-image-placeholder">
-            <span class="tag">PIANO</span>
+            <span class="tag">MUSIC</span>
           </div>
           <div class="card-body">
             <h3>{course.title}</h3>
@@ -49,7 +80,7 @@
               </div>
               <div class="meta-row">
                 <span class="pct">{course.progress}% Complete</span>
-                <span class="lessons">{course.lessons}</span>
+                <span class="lessons">{course.completedLessons}/{course.totalLessons} Lessons</span>
               </div>
             </div>
 
@@ -58,6 +89,7 @@
         </div>
       {/each}
     </div>
+    {/if}
   {:else}
     <div class="empty-state">
       <p>No courses in this category currently.</p>

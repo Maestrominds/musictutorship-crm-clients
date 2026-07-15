@@ -1,15 +1,22 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
-  import { onDestroy } from 'svelte';
-  import { studentsStore, type Student } from '../dataStore';
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
+  import type { Student } from '../dataStore';
 
-  let students: Student[] = $state([]);
-  const unsubscribe = studentsStore.subscribe((val) => {
-    students = val;
-  });
+  let students = $state<Student[]>([]);
+  let isLoading = $state(true);
 
-  onDestroy(() => {
-    unsubscribe();
+  // NOTE: GET /api/admin/students is not yet implemented. See backend_dev_todo.md #3
+  onMount(async () => {
+    try {
+      const data = await apiGet<Student[]>('/admin/students');
+      students = data || [];
+    } catch {
+      students = []; // Not yet available — show empty state
+    } finally {
+      isLoading = false;
+    }
   });
 
   let searchQuery = $state('');
@@ -24,10 +31,6 @@
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  }
-
-  function deleteStudent(id: number) {
-    studentsStore.update(list => list.filter(s => s.id !== id));
   }
 </script>
 
@@ -55,6 +58,9 @@
   </div>
 
   <div class="table-card">
+    {#if isLoading}
+      <div style="text-align:center;padding:40px;color:#999;">Loading students...</div>
+    {:else}
     <table class="students-table">
       <thead>
         <tr>
@@ -63,13 +69,14 @@
           <th>MENTOR</th>
           <th>ENROLLMENT DATE</th>
           <th>PAYMENT STATUS</th>
-          <th>ACTIONS</th>
         </tr>
       </thead>
       <tbody>
         {#if filteredStudents.length === 0}
           <tr>
-            <td colspan="6" class="empty-row">No students found.</td>
+            <td colspan="5" class="empty-row" style="text-align:center;padding:24px;color:#999;">
+              No students found. The backend endpoint is pending — see backend_dev_todo.md #3.
+            </td>
           </tr>
         {:else}
           {#each filteredStudents as student}
@@ -81,20 +88,15 @@
                   <span class="email">{student.email}</span>
                 </div>
               </td>
-              <td class="course-text">{student.course}</td>
-              <td class="mentor-text">{student.mentor}</td>
-              <td class="date-text">{student.enrollmentDate}</td>
-              <td>
-                <span class="status-badge" class:paid={student.paymentStatus === 'Paid'} class:pending={student.paymentStatus === 'Pending'} class:overdue={student.paymentStatus === 'Overdue'}>
-                  {student.paymentStatus}
-                </span>
+              <td class="course-text">{student.course_title || student.course || '—'}</td>
+              <td class="mentor-text">{student.mentor_name || student.mentor || '—'}</td>
+              <td class="date-text">
+                {student.enrolled_at ? new Date(student.enrolled_at).toLocaleDateString() : (student.enrollmentDate || '—')}
               </td>
               <td>
-                <div class="actions-row">
-                  <button class="action-icon-btn" title="View details"><Icon name="eye" size={14} /></button>
-                  <button class="action-icon-btn" title="Edit student"><Icon name="edit" size={14} /></button>
-                  <button class="action-icon-btn delete" onclick={() => deleteStudent(student.id)} title="Delete student"><Icon name="x" size={14} /></button>
-                </div>
+                <span class="status-badge" class:paid={student.paymentStatus === 'Paid'} class:pending={student.paymentStatus === 'Pending'} class:overdue={student.paymentStatus === 'Overdue'}>
+                  {student.paymentStatus || 'Paid'}
+                </span>
               </td>
             </tr>
           {/each}
@@ -103,17 +105,9 @@
     </table>
 
     <div class="table-footer">
-      <span class="results-count">Showing 1 to {filteredStudents.length} of {students.length} students</span>
-      <div class="pagination">
-        <button class="pag-btn prev">◀</button>
-        <button class="pag-btn active">1</button>
-        <button class="pag-btn">2</button>
-        <button class="pag-btn">3</button>
-        <span class="pag-dots">...</span>
-        <button class="pag-btn">9</button>
-        <button class="pag-btn next">▶</button>
-      </div>
+      <span class="results-count">Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}</span>
     </div>
+    {/if}
   </div>
 </div>
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
   import LeadsView from './admin/LeadsView.svelte';
   import TrialsView from './admin/TrialsView.svelte';
@@ -7,31 +8,43 @@
   import CoursesView from './admin/CoursesView.svelte';
   import PaymentsView from './admin/PaymentsView.svelte';
   import MentorsView from './admin/MentorsView.svelte';
+  import { apiGet } from './api';
 
   let activeSubView = $state<'dashboard' | 'leads' | 'trials' | 'students' | 'courses' | 'payments' | 'mentors'>('dashboard');
 
   function handleLogout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     goto('/login');
   }
 
-  // Sample data for list representation to show backend-ready format
-  const recentLeads = [
-    { name: 'Liam Johnson', course: 'Piano Advanced', date: 'Oct 24, 2023', status: 'In Review' },
-    { name: 'Liam Johnson', course: 'Piano Advanced', date: 'Oct 24, 2023', status: 'In Review' },
-    { name: 'Liam Johnson', course: 'Piano Advanced', date: 'Oct 24, 2023', status: 'In Review' }
-  ];
+  // Get admin name from localStorage
+  const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+  const user = userStr ? JSON.parse(userStr) : null;
+  const userName = user?.name || 'Admin User';
 
-  const upcomingClasses = [
-    { date: 'OCT 25', name: 'Jazz Piano Improvisation', time: '02:00 PM - 03:30 PM', mentor: 'Mentor: Miles D.' },
-    { date: 'OCT 26', name: 'Vocal Breathing Techniques', time: '10:00 AM - 11:30 AM', mentor: 'Mentor: Adele K.' },
-    { date: 'OCT 28', name: 'Advanced Guitar Riffs', time: '04:00 PM - 05:30 PM', mentor: 'Mentor: Jimi H.' }
-  ];
+  // Dashboard live data
+  let stats = $state({ totalLeads: 0, activeStudents: 0, upcomingTrials: 0, monthlyRevenue: 0 });
+  let recentLeads = $state<{ name: string; email: string; status: string; created_at: string }[]>([]);
+  let upcomingClasses = $state<{ date: string; name: string; time: string; mentor: string }[]>([]);
+  let recentPayments = $state<{ id: string; student: string; amount: string; date: string; status: string }[]>([]);
 
-  const recentPayments = [
-    { id: '#TRX-92910', student: 'Mark Wilson', amount: '$150.00', date: 'Oct 24, 2023', method: 'Credit Card', status: 'Completed' },
-    { id: '#TRX-92911', student: 'Sarah Lee', amount: '$220.00', date: 'Oct 24, 2023', method: 'PayPal', status: 'Completed' },
-    { id: '#TRX-92912', student: 'Daniel Brown', amount: '$110.00', date: 'Oct 23, 2023', method: 'Credit Card', status: 'Pending' }
-  ];
+  // NOTE: GET /api/admin/stats is not yet implemented — see backend_dev_todo.md #1
+  // NOTE: GET /api/admin/leads is not yet implemented — see backend_dev_todo.md #2
+  // NOTE: GET /api/admin/classes is not yet implemented — see backend_dev_todo.md #7
+  // NOTE: GET /api/admin/payments is not yet implemented — see backend_dev_todo.md #6
+  onMount(async () => {
+    // Attempt to fetch leads for recent leads widget
+    try {
+      const leads = await apiGet<any[]>('/admin/leads');
+      recentLeads = (leads || []).slice(0, 5).map(l => ({
+        name: l.name,
+        email: l.email,
+        status: l.status || 'New',
+        created_at: l.created_at ? new Date(l.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
+      }));
+    } catch { /* endpoint pending */ }
+  });
 </script>
 
 <div class="dashboard-layout">
@@ -89,8 +102,8 @@
           <span class="badge"></span>
         </button>
         <div class="profile-details">
-          <span class="user-name">Admin User</span>
-          <span class="user-role">Principal Manager</span>
+          <span class="user-name">{userName}</span>
+          <span class="user-role">Admin</span>
         </div>
         <div class="avatar">
           <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Avatar" />
@@ -103,39 +116,40 @@
       {#if activeSubView === 'dashboard'}
         <!-- Stats Cards -->
         <section class="stats-grid">
+          <!-- NOTE: Stats from GET /api/admin/stats — see backend_dev_todo.md #1 -->
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-icon-wrapper blue"><Icon name="chart" size={18} /></span>
-              <span class="stat-trend positive">+12.5% ↗</span>
+              <span class="stat-trend positive">↗</span>
             </div>
-            <div class="stat-value">1,284</div>
+            <div class="stat-value">{stats.totalLeads || '—'}</div>
             <div class="stat-label">Total Leads</div>
           </div>
 
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-icon-wrapper purple"><Icon name="music" size={18} /></span>
-              <span class="stat-trend positive">+5.2% ↗</span>
+              <span class="stat-trend positive">↗</span>
             </div>
-            <div class="stat-value">456</div>
+            <div class="stat-value">{stats.activeStudents || '—'}</div>
             <div class="stat-label">Active Students</div>
           </div>
 
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-icon-wrapper orange">⏳</span>
-              <span class="stat-trend negative">-2.1% ↘</span>
+              <span class="stat-trend negative">↘</span>
             </div>
-            <div class="stat-value">24</div>
+            <div class="stat-value">{stats.upcomingTrials || '—'}</div>
             <div class="stat-label">Upcoming Trials</div>
           </div>
 
           <div class="stat-card">
             <div class="stat-header">
               <span class="stat-icon-wrapper green"><Icon name="dollar" size={18} /></span>
-              <span class="stat-trend positive">+15.8% ↗</span>
+              <span class="stat-trend positive">↗</span>
             </div>
-            <div class="stat-value">$12,500</div>
+            <div class="stat-value">{stats.monthlyRevenue ? `$${stats.monthlyRevenue.toLocaleString()}` : '—'}</div>
             <div class="stat-label">Monthly Revenue</div>
           </div>
         </section>
@@ -193,26 +207,29 @@
           <div class="list-card recent-leads">
             <div class="list-header">
               <h3>Recent Leads</h3>
-              <button class="view-all-btn">View All</button>
+              <button class="view-all-btn" onclick={() => activeSubView = 'leads'}>View All</button>
             </div>
             <table class="data-table">
               <thead>
                 <tr>
                   <th>LEAD NAME</th>
-                  <th>COURSE</th>
+                  <th>EMAIL</th>
                   <th>DATE</th>
                   <th>STATUS</th>
                 </tr>
               </thead>
               <tbody>
+                {#if recentLeads.length === 0}
+                  <tr><td colspan="4" style="text-align:center;color:#999;padding:20px;">No leads yet. Add leads from the Leads tab.</td></tr>
+                {/if}
                 {#each recentLeads as lead}
                   <tr>
                     <td class="user-cell">
                       <div class="avatar-sm"><Icon name="user" size={14} /></div>
                       <span>{lead.name}</span>
                     </td>
-                    <td>{lead.course}</td>
-                    <td>{lead.date}</td>
+                    <td>{lead.email}</td>
+                    <td>{lead.created_at}</td>
                     <td><span class="status-badge yellow">{lead.status}</span></td>
                   </tr>
                 {/each}
@@ -221,12 +238,16 @@
           </div>
 
           <!-- Upcoming Classes -->
+          <!-- NOTE: requires GET /api/admin/classes — see backend_dev_todo.md #7 -->
           <div class="list-card upcoming-classes">
             <div class="list-header">
               <h3>Upcoming Classes</h3>
               <button class="view-all-btn">Calendar View</button>
             </div>
             <div class="classes-list">
+              {#if upcomingClasses.length === 0}
+                <div style="text-align:center;color:#999;padding:20px;font-size:0.85rem;">Upcoming classes will appear here once the backend endpoint is ready.</div>
+              {/if}
               {#each upcomingClasses as item}
                 <div class="class-item">
                   <div class="class-date-badge">
@@ -245,37 +266,34 @@
         </section>
 
         <!-- Recent Payments -->
+        <!-- NOTE: requires GET /api/admin/payments — see backend_dev_todo.md #6 -->
         <section class="payments-section">
           <div class="list-card">
             <div class="list-header">
               <h3>Recent Payments</h3>
-              <div class="table-actions">
-                <button class="icon-btn" title="Search"><Icon name="search" size={14} /></button>
-                <button class="icon-btn" title="Download"><Icon name="file" size={14} /></button>
-              </div>
+              <button class="view-all-btn" onclick={() => activeSubView = 'payments'}>View All</button>
             </div>
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>TRANSACTION ID</th>
                   <th>STUDENT</th>
                   <th>AMOUNT</th>
                   <th>DATE</th>
-                  <th>METHOD</th>
                   <th>STATUS</th>
                 </tr>
               </thead>
               <tbody>
+                {#if recentPayments.length === 0}
+                  <tr><td colspan="4" style="text-align:center;color:#999;padding:20px;">Payment data will appear here once the backend endpoint is ready.</td></tr>
+                {/if}
                 {#each recentPayments as pay}
                   <tr>
-                    <td>{pay.id}</td>
                     <td class="user-cell">
-                      <div class="avatar-sm initials">MW</div>
+                      <div class="avatar-sm initials">{pay.student.charAt(0)}</div>
                       <span>{pay.student}</span>
                     </td>
                     <td class="amount-cell">{pay.amount}</td>
                     <td>{pay.date}</td>
-                    <td>{pay.method}</td>
                     <td><span class="status-badge" class:green={pay.status === 'Completed'} class:orange={pay.status === 'Pending'}>{pay.status}</span></td>
                   </tr>
                 {/each}
