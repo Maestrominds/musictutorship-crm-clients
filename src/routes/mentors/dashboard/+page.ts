@@ -1,4 +1,4 @@
-import { API_URL } from '$env/static/public';
+import { PUBLIC_API_URL } from '$env/static/public';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch }) => {
@@ -12,7 +12,7 @@ export const load: PageLoad = async ({ fetch }) => {
   }
 
   try {
-    const res = await fetch(`${API_URL || ''}/api/v1/mentor/classes`, {
+    const res = await fetch(`${PUBLIC_API_URL || ''}/api/v1/mentor/classes`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
