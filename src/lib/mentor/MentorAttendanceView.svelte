@@ -16,9 +16,11 @@
   let errorMsg = $state('');
 
   let showMarkModal = $state(false);
-  let newClassId = $state(0);
-  let newStudentId = $state(0);
-  let newStatus = $state<'present' | 'absent' | 'excused'>('present');
+  let newStudent = $state('Benjamin Chen');
+  let newCourse = $state('Classical Piano II');
+  let newClassId = $state(1);
+  let newStudentId = $state(1);
+  let newStatus = $state<'Present' | 'Absent' | 'Excused'>('Present');
   let isSubmitting = $state(false);
   let submitError = $state('');
 
@@ -52,15 +54,15 @@
       await apiPost('/mentor/attendance', {
         class_id: newClassId,
         student_id: newStudentId,
-        status: newStatus
+        status: newStatus.toLowerCase()
       });
       // Optimistically add to local list
       records = [{
         id: Date.now(),
-        studentName: `Student #${newStudentId}`,
-        course: `Class #${newClassId}`,
+        studentName: newStudent,
+        course: newCourse,
         classDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        status: (newStatus.charAt(0).toUpperCase() + newStatus.slice(1)) as 'Present' | 'Absent' | 'Excused'
+        status: newStatus
       }, ...records];
       closeModal();
     } catch (err) {
