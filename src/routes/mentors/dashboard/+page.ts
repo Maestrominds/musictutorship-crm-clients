@@ -12,7 +12,7 @@ export const load: PageLoad = async ({ fetch }) => {
   }
 
   try {
-    const res = await fetch(`${PUBLIC_API_URL || ''}/api/v1/mentor/classes`, {
+    const res = await fetch(`${PUBLIC_API_URL || ''}/api/mentor/classes`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

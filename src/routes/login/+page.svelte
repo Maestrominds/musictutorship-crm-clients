@@ -36,7 +36,7 @@
     isLoading = true;
 
     try {
-      const res = await fetch(`${PUBLIC_API_URL || ''}/api/v1/login`, {
+      const res = await fetch(`${PUBLIC_API_URL || ''}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
