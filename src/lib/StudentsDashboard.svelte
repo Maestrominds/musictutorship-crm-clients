@@ -79,8 +79,8 @@
           <span class="user-name">{userName}</span>
           <span class="user-role">Student</span>
         </div>
-        <div class="avatar">
-          <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80" alt="Avatar" />
+        <div class="avatar" style="display: flex; align-items: center; justify-content: center; background: #38a169; color: white; border-radius: 50%; font-weight: 700; width: 36px; height: 36px; font-size: 1rem;">
+          {userName.charAt(0).toUpperCase()}
         </div>
       </div>
     </header>

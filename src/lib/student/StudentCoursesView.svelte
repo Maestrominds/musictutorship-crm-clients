@@ -126,10 +126,10 @@
     <div class="goal-card">
       <div class="card-header">
         <h3>Daily Goal</h3>
-        <span class="goal-value">45 <span class="muted">/ 60 mins</span></span>
+        <span class="goal-value">0 <span class="muted">/ 60 mins</span></span>
       </div>
       <div class="bar-bg">
-        <div class="bar-fill" style="width: 75%"></div>
+        <div class="bar-fill" style="width: 0%"></div>
       </div>
       <p class="goal-message">"Practice makes progress. You're almost at your goal for today!"</p>
     </div>

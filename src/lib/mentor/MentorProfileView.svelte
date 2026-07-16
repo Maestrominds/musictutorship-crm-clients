@@ -1,10 +1,12 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import { onMount } from 'svelte';
+
   // Profile settings state
-  let fullName = $state('Alex Thompson');
-  let emailAddress = $state('alex.thompson@musicacademy.com');
-  let phoneNumber = $state('+1 (555) 000-1234');
-  let specialty = $state('Classical Piano');
+  let fullName = $state('');
+  let emailAddress = $state('');
+  let phoneNumber = $state('');
+  let specialty = $state('');
 
   // Availability Settings
   let isMonEnabled = $state(true);
@@ -15,6 +17,21 @@
   let reminderEmail = $state(true);
   let reminderPush = $state(true);
   let messageAlerts = $state(true);
+
+  onMount(() => {
+    const userJson = localStorage.getItem('user');
+    if (userJson) {
+      try {
+        const user = JSON.parse(userJson);
+        fullName = user.name || 'Instructor';
+        emailAddress = user.email || '';
+        phoneNumber = user.phone || '+1 (555) 000-1234';
+        specialty = user.specialty || 'Classical Piano';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  });
 
   function saveChanges() {
     alert('Changes saved successfully!');
@@ -39,11 +56,9 @@
     <div class="profile-info-grid">
       <!-- Avatar Section -->
       <div class="avatar-column">
-        <div class="avatar-wrapper">
-          <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80" alt="Avatar" />
-          <button class="upload-badge" title="Upload new photo"><Icon name="edit" size={13} /></button>
+        <div class="avatar-wrapper" style="display: flex; align-items: center; justify-content: center; background: #2b6cb0; color: white; border-radius: 50%; font-weight: 700; width: 100px; height: 100px; font-size: 2.5rem; position: relative;">
+          {fullName ? fullName.charAt(0).toUpperCase() : ''}
         </div>
-        <span class="file-info">JPG, GIF or PNG.<br/>Max size of 800K</span>
       </div>
 
       <!-- Inputs Fields -->
@@ -218,17 +233,6 @@
           </div>
         </div>
         <button class="action-btn">Change</button>
-      </div>
-
-      <div class="security-item">
-        <div class="sec-left">
-          <span class="icon"><Icon name="shield" size={18} /></span>
-          <div class="sec-text">
-            <span class="title">Two-Factor Authentication</span>
-            <span class="desc">Disabled (Recommended)</span>
-          </div>
-        </div>
-        <button class="action-btn select">Setup</button>
       </div>
     </div>
   </div>

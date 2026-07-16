@@ -30,7 +30,10 @@
     }
   });
 
-  const payments = $derived(paymentsList);
+  const totalPaid = $derived(
+    paymentsList.reduce((sum, p) => sum + parseFloat(p.amount.replace(/[^0-9.]/g, '')), 0)
+  );
+  const paymentCount = $derived(paymentsList.length);
 </script>
 
 
@@ -49,20 +52,20 @@
   <div class="stats-row">
     <div class="stat-card">
       <span class="label">TOTAL PAID</span>
-      <div class="value">$2,450.00</div>
-      <span class="trend positive">↗ 12 payments this year</span>
+      <div class="value">${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+      <span class="trend positive">↗ {paymentCount} payments total</span>
     </div>
 
     <div class="stat-card">
       <span class="label">OUTSTANDING BALANCE</span>
-      <div class="value">$150.00</div>
-      <span class="trend warning">⏳ 1 pending invoice</span>
+      <div class="value">$0.00</div>
+      <span class="trend">⏳ No pending invoices</span>
     </div>
 
     <div class="stat-card">
       <span class="label">NEXT PAYMENT DATE</span>
-      <div class="value">Oct 15, 2023</div>
-      <span class="trend negative"><Icon name="activity" size={12} /> Automatic billing enabled</span>
+      <div class="value">N/A</div>
+      <span class="trend"><Icon name="activity" size={12} /> Billing managed by Admin</span>
     </div>
   </div>
 
