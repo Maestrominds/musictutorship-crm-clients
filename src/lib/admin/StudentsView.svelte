@@ -1,13 +1,12 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet } from '$lib/api';
+  import { apiGet, apiFetch } from '$lib/api';
   import type { Student } from '../dataStore';
 
   let students = $state<Student[]>([]);
   let isLoading = $state(true);
 
-  // NOTE: GET /api/admin/students is not yet implemented. See backend_dev_todo.md #3
   onMount(async () => {
     try {
       const data = await apiGet<Student[]>('/admin/students');
@@ -24,13 +23,52 @@
     students.filter(student => {
       const matchSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          student.course.toLowerCase().includes(searchQuery.toLowerCase());
+                          (student.course_title || student.course || '').toLowerCase().includes(searchQuery.toLowerCase());
       return matchSearch;
     })
   );
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  }
+
+  // Edit states
+  let showEditModal = $state(false);
+  let editStudentId = $state<number | null>(null);
+  let editName = $state('');
+  let editEmail = $state('');
+
+  function openEditModal(student: any) {
+    editStudentId = student.id;
+    editName = student.name;
+    editEmail = student.email;
+    showEditModal = true;
+  }
+  function closeEditModal() { showEditModal = false; editStudentId = null; }
+
+  async function updateStudent(e: SubmitEvent) {
+    e.preventDefault();
+    if (!editStudentId || !editName || !editEmail) return;
+    try {
+      await apiFetch(`/admin/users/${editStudentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: editName, email: editEmail })
+      });
+      students = students.map(s => s.id === editStudentId ? { ...s, name: editName, email: editEmail } : s);
+      closeEditModal();
+    } catch (err) {
+      alert('Failed to update student: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+
+  async function removeStudent(id: number) {
+    if (!confirm('Are you sure you want to delete this student?')) return;
+    try {
+      await apiFetch(`/admin/users/${id}`, { method: 'DELETE' });
+      students = students.filter(s => s.id !== id);
+    } catch (err) {
+      alert('Failed to delete student: ' + (err instanceof Error ? err.message : String(err)));
+    }
   }
 </script>
 
@@ -69,13 +107,14 @@
           <th>MENTOR</th>
           <th>ENROLLMENT DATE</th>
           <th>PAYMENT STATUS</th>
+          <th>ACTIONS</th>
         </tr>
       </thead>
       <tbody>
         {#if filteredStudents.length === 0}
           <tr>
-            <td colspan="5" class="empty-row" style="text-align:center;padding:24px;color:#999;">
-              No students found. The backend endpoint is pending — see backend_dev_todo.md #3.
+            <td colspan="6" class="empty-row" style="text-align:center;padding:24px;color:#999;">
+              No students found.
             </td>
           </tr>
         {:else}
@@ -98,6 +137,16 @@
                   {student.paymentStatus || 'Paid'}
                 </span>
               </td>
+              <td>
+                <div style="display: flex; gap: 8px;">
+                  <button onclick={() => openEditModal(student)} style="background: none; border: none; cursor: pointer; padding: 4px;" title="Edit student">
+                    <Icon name="edit" size={14} />
+                  </button>
+                  <button onclick={() => removeStudent(student.id)} style="background: none; border: none; cursor: pointer; padding: 4px; color: #e53e3e;" title="Delete student">
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+              </td>
             </tr>
           {/each}
         {/if}
@@ -107,6 +156,32 @@
     <div class="table-footer">
       <span class="results-count">Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}</span>
     </div>
+    {/if}
+
+    <!-- Edit Student Modal -->
+    {#if showEditModal}
+      <div class="modal-overlay" onclick={closeEditModal} aria-hidden="true" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100;">
+        <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" style="background: white; padding: 24px; border-radius: 8px; width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 1.2rem;">Edit Student Profile</h3>
+            <button class="close-btn" onclick={closeEditModal} style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+          </div>
+          <form onsubmit={updateStudent} class="modal-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+              <label for="edit-student-name" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Full Name</label>
+              <input type="text" id="edit-student-name" bind:value={editName} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;" required />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+              <label for="edit-student-email" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Email Address</label>
+              <input type="email" id="edit-student-email" bind:value={editEmail} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;" required />
+            </div>
+            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+              <button type="button" class="cancel-btn" onclick={closeEditModal} style="padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 4px; background: white; cursor: pointer;">Cancel</button>
+              <button type="submit" class="submit-btn" style="padding: 8px 16px; border: none; border-radius: 4px; background: #e53e3e; color: white; cursor: pointer; font-weight: 600;">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
     {/if}
   </div>
 </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet, apiPost } from '$lib/api';
+  import { apiGet, apiPost, apiFetch } from '$lib/api';
 
   interface Lead {
     id: number;
@@ -45,20 +45,22 @@
     })
   );
 
-  // NOTE: GET /api/admin/leads is not yet implemented by backend.
-  // See backend_dev_todo.md — item #2.
   onMount(async () => {
     try {
-      const data = await apiGet<Lead[]>('/admin/leads');
+      const data = await apiGet<any[]>('/admin/leads');
       leads = (data || []).map(l => ({
-        ...l,
-        createdDate: l.createdDate
-          ? new Date(l.createdDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        id: l.id,
+        name: l.name,
+        phone: l.phone || '',
+        email: l.email,
+        course: l.course || 'Classical Piano',
+        status: l.mapped_status || 'New',
+        createdDate: l.created_at
+          ? new Date(l.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'N/A'
       }));
     } catch (err) {
-      // Endpoint not yet available — show empty list
-      errorMsg = '';
+      errorMsg = 'Failed to load leads';
     } finally {
       isLoading = false;
     }
@@ -202,7 +204,43 @@
               </td>
               <td class="date-text">{lead.createdDate}</td>
               <td>
-                <button class="action-menu-btn">•••</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <select 
+                    value={lead.status} 
+                    onchange={async (e) => {
+                      const newStatus = (e.target as HTMLSelectElement).value;
+                      try {
+                        await apiFetch(`/admin/leads/${lead.id}/status`, {
+                          method: 'PATCH',
+                          body: JSON.stringify({ status: newStatus })
+                        });
+                        lead.status = newStatus as any;
+                      } catch (err) {
+                        alert('Failed to update status: ' + (err instanceof Error ? err.message : String(err)));
+                      }
+                    }}
+                    style="padding: 4px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem; background: white;"
+                  >
+                    <option value="New">New</option>
+                    <option value="In Review">In Review</option>
+                    <option value="Contacted">Contacted</option>
+                  </select>
+                  {#if lead.status !== 'Contacted'}
+                    <button 
+                      onclick={async () => {
+                        try {
+                          await apiPost(`/admin/leads/${lead.id}/convert`, {});
+                          lead.status = 'Contacted';
+                        } catch (err) {
+                          alert('Failed to convert lead: ' + (err instanceof Error ? err.message : String(err)));
+                        }
+                      }}
+                      style="padding: 4px 8px; border-radius: 4px; border: none; background: #e53e3e; color: white; font-size: 0.8rem; cursor: pointer;"
+                    >
+                      Convert
+                    </button>
+                  {/if}
+                </div>
               </td>
             </tr>
           {/each}

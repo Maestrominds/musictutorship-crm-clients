@@ -9,22 +9,28 @@
     date: string;
   }
 
-  let { dashboardData = null } = $props();
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
 
-  // NOTE: GET /api/student/payments is not yet implemented. See backend_dev_todo.md #13
-  // Using dashboardData.recent_payments if available
-  const dbPayments = $derived(
-    dashboardData?.recent_payments?.map((p: any) => ({
-      id: p.id,
-      courseName: 'Course Tuition',
-      amount: `$${p.amount}`,
-      method: 'Online Payment',
-      status: 'Paid' as const,
-      date: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'
-    })) || []
-  );
+  let paymentsList = $state<StudentPayment[]>([]);
 
-  const payments = $derived(dbPayments);
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/student/payments');
+      paymentsList = (data || []).map((p: any) => ({
+        id: p.id,
+        courseName: p.course_title || 'Course Tuition',
+        amount: `$${p.amount}`,
+        method: 'Online Payment',
+        status: 'Paid',
+        date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
+      }));
+    } catch (err) {
+      console.error('Failed to load payments:', err);
+    }
+  });
+
+  const payments = $derived(paymentsList);
 </script>
 
 

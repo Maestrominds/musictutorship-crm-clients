@@ -14,9 +14,9 @@
 
   let upcomingClasses = $state<{ name: string; initials: string; course: string; dateTime: string; isActionable: boolean }[]>([]);
   let stats = $state({ assignedStudents: 0, upcomingCount: 0, completedCount: 0 });
+  let recentActivities = $state<{ name: string; time: string; level: string; status: string; lastActive: string; progress: number }[]>([]);
   let isLoading = $state(true);
 
-  // NOTE: GET /api/mentor/stats is not yet implemented. See backend_dev_todo.md #11
   onMount(async () => {
     try {
       const data = await apiGet<ApiClass[]>('/mentor/classes');
@@ -33,17 +33,37 @@
           dateTime: new Date(c.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
           isActionable: !!c.gmeet_link
         }));
-
-      stats.upcomingCount = classes.filter(c => new Date(c.scheduled_at) >= now).length;
-      stats.completedCount = classes.filter(c => new Date(c.scheduled_at) < now).length;
     } catch (err) {
-      // Graceful fallback — stats remain 0
+      console.error(err);
+    }
+
+    try {
+      const statsRes = await apiGet<any>('/mentor/stats');
+      stats = {
+        assignedStudents: statsRes.assigned_students || 0,
+        upcomingCount: statsRes.upcoming_classes || 0,
+        completedCount: statsRes.completed_classes || 0
+      };
+    } catch (err) {
+      console.error(err);
+    }
+
+    try {
+      const students = await apiGet<any[]>('/mentor/students');
+      recentActivities = (students || []).slice(0, 5).map(s => ({
+        name: s.name,
+        time: s.next_class_at ? `Next: ${new Date(s.next_class_at).toLocaleDateString()}` : 'No classes scheduled',
+        level: s.course_title,
+        status: s.progress_percent >= 100 ? 'Completed' : 'Active',
+        lastActive: s.next_class_at ? new Date(s.next_class_at).toLocaleDateString() : 'N/A',
+        progress: s.progress_percent
+      }));
+    } catch (err) {
+      console.error(err);
     } finally {
       isLoading = false;
     }
   });
-
-  // NOTE: recentActivities requires GET /api/mentor/students — see backend_dev_todo.md #9
 </script>
 
 <div class="mentor-dash-view">
@@ -124,10 +144,8 @@
         <h3>Recent Activity</h3>
       </div>
 
-      <!-- NOTE: Student progress/activity requires GET /api/mentor/students — see backend_dev_todo.md #9 -->
       <div class="activity-list">
-        <div class="empty-state-inline"><p>Student activity data coming soon.</p></div>
-        {#each [] as act}
+        {#each recentActivities as act}
           <div class="activity-item">
             <div class="avatar-circle"><Icon name="user" size={18} /></div>
             <div class="activity-details">
@@ -155,6 +173,10 @@
               {/if}
             </div>
           </div>
+        {:else}
+          {#if !isLoading}
+            <div class="empty-state-inline"><p>No assigned students or activities yet.</p></div>
+          {/if}
         {/each}
       </div>
 

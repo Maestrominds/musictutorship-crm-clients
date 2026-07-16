@@ -1,13 +1,12 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet, apiPost } from '$lib/api';
+  import { apiGet, apiPost, apiFetch } from '$lib/api';
   import type { Course } from '../dataStore';
 
   let courses = $state<Course[]>([]);
   let isLoading = $state(true);
 
-  // NOTE: GET /api/admin/courses is not yet implemented. See backend_dev_todo.md #5
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/admin/courses');
@@ -21,7 +20,7 @@
         isPremium: true
       }));
     } catch {
-      courses = []; // Not yet available — show empty state
+      courses = [];
     } finally {
       isLoading = false;
     }
@@ -36,8 +35,28 @@
   let isSubmitting = $state(false);
   let submitError = $state('');
 
+  // Edit states
+  let showEditModal = $state(false);
+  let editCourseId = $state<number | null>(null);
+  let editName = $state('');
+  let editDescription = $state('');
+  let editPrice = $state('150');
+  let editDuration = $state('3 Months');
+  let editMentor = $state('');
+
   function openModal() { showModal = true; }
   function closeModal() { showModal = false; newName = ''; newDescription = ''; submitError = ''; }
+
+  function openEditModal(course: Course) {
+    editCourseId = course.id;
+    editName = course.name;
+    editDescription = course.description;
+    editPrice = course.price.replace(/[^0-9.]/g, '');
+    editDuration = course.duration;
+    editMentor = course.mentorName;
+    showEditModal = true;
+  }
+  function closeEditModal() { showEditModal = false; editCourseId = null; submitError = ''; }
 
   async function createCourse(e: SubmitEvent) {
     e.preventDefault();
@@ -45,14 +64,13 @@
     isSubmitting = true;
     submitError = '';
     try {
-      await apiPost('/admin/courses', {
+      const newCourseRes = await apiPost<any>('/admin/courses', {
         title: newName,
         description: newDescription,
         price: parseFloat(newPrice)
       });
-      // Optimistically add
       courses = [...courses, {
-        id: Date.now(),
+        id: newCourseRes.id || Date.now(),
         name: newName,
         description: newDescription,
         price: `$${newPrice}/mo`,
@@ -68,8 +86,44 @@
     }
   }
 
-  function removeCourse(id: number) {
-    courses = courses.filter(c => c.id !== id);
+  async function updateCourse(e: SubmitEvent) {
+    e.preventDefault();
+    if (!editCourseId || !editName || !editDescription) return;
+    isSubmitting = true;
+    submitError = '';
+    try {
+      await apiFetch(`/admin/courses/${editCourseId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: editName,
+          description: editDescription,
+          price: parseFloat(editPrice)
+        })
+      });
+      courses = courses.map(c => c.id === editCourseId ? {
+        ...c,
+        name: editName,
+        description: editDescription,
+        price: `$${editPrice}/mo`,
+        duration: editDuration,
+        mentorName: editMentor
+      } : c);
+      closeEditModal();
+    } catch (err) {
+      submitError = err instanceof Error ? err.message : 'Failed to update course';
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
+  async function removeCourse(id: number) {
+    if (!confirm('Are you sure you want to delete this course?')) return;
+    try {
+      await apiFetch(`/admin/courses/${id}`, { method: 'DELETE' });
+      courses = courses.filter(c => c.id !== id);
+    } catch (err) {
+      alert('Failed to delete course: ' + (err instanceof Error ? err.message : String(err)));
+    }
   }
 </script>
 
@@ -116,7 +170,7 @@
               </div>
             </div>
             <div class="actions">
-              <button class="action-btn" title="Edit course"><Icon name="edit" size={14} /></button>
+              <button class="action-btn" onclick={() => openEditModal(course)} title="Edit course"><Icon name="edit" size={14} /></button>
               <button class="action-btn delete" onclick={() => removeCourse(course.id)} title="Delete course"><Icon name="x" size={14} /></button>
             </div>
           </div>
@@ -171,6 +225,51 @@
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
             <button type="submit" class="submit-btn">Save Course</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Edit Modal Overlay -->
+  {#if showEditModal}
+    <div class="modal-overlay" onclick={closeEditModal} aria-hidden="true">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+        <div class="modal-header">
+          <h3>Edit Course</h3>
+          <button class="close-btn" onclick={closeEditModal}>&times;</button>
+        </div>
+        <form onsubmit={updateCourse} class="modal-form">
+          <div class="form-group">
+            <label for="edit-course-name">Course Title</label>
+            <input type="text" id="edit-course-name" bind:value={editName} required />
+          </div>
+          <div class="form-group">
+            <label for="edit-course-desc">Description</label>
+            <textarea id="edit-course-desc" bind:value={editDescription} rows="3" required></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-course-price">Price</label>
+              <input type="text" id="edit-course-price" bind:value={editPrice} required />
+            </div>
+            <div class="form-group">
+              <label for="edit-course-duration">Duration</label>
+              <input type="text" id="edit-course-duration" bind:value={editDuration} required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-course-mentor">Assign Mentor</label>
+            <select id="edit-course-mentor" bind:value={editMentor}>
+              <option value="Alex Rivers">Alex Rivers</option>
+              <option value="Sarah Jenkins">Sarah Jenkins</option>
+              <option value="Michael Chen">Michael Chen</option>
+              <option value="Emily Watson">Emily Watson</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="cancel-btn" onclick={closeEditModal}>Cancel</button>
+            <button type="submit" class="submit-btn">Save Changes</button>
           </div>
         </form>
       </div>

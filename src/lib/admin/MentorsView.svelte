@@ -1,17 +1,26 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet } from '$lib/api';
+  import { apiGet, apiFetch } from '$lib/api';
   import type { Mentor } from '../dataStore';
 
   let mentors = $state<Mentor[]>([]);
   let isLoading = $state(true);
 
-  // NOTE: GET /api/admin/mentors is not yet implemented. See backend_dev_todo.md #4
   onMount(async () => {
     try {
-      const data = await apiGet<Mentor[]>('/admin/mentors');
-      mentors = data || [];
+      const data = await apiGet<any[]>('/admin/mentors');
+      mentors = (data || []).map(m => ({
+        id: m.id,
+        name: m.name,
+        role: 'Instructor',
+        specialty: m.specialty || 'General',
+        specialtyTag: m.specialty || 'General',
+        email: m.email,
+        phone: '',
+        studentCount: m.student_count || 0,
+        status: m.status || 'Active'
+      }));
     } catch {
       mentors = []; // Not yet available — show empty state
     } finally {
@@ -31,6 +40,12 @@
   let newEmail = $state('');
   let newPhone = $state('');
   let newStudentCount = $state(0);
+
+  // Edit states
+  let showEditModal = $state(false);
+  let editMentorId = $state<number | null>(null);
+  let editName = $state('');
+  let editEmail = $state('');
 
   let filteredMentors = $derived(
     mentors.filter(m => {
@@ -56,6 +71,14 @@
     newStudentCount = 0;
   }
 
+  function openEditModal(mentor: Mentor) {
+    editMentorId = mentor.id;
+    editName = mentor.name;
+    editEmail = mentor.email;
+    showEditModal = true;
+  }
+  function closeEditModal() { showEditModal = false; editMentorId = null; }
+
   function addMentor(e: SubmitEvent) {
     e.preventDefault();
     if (!newName || !newEmail || !newPhone) return;
@@ -72,12 +95,33 @@
       status: 'Active'
     };
 
-    mentorsStore.update((list) => [...list, newMentor]);
+    mentors = [...mentors, newMentor];
     closeModal();
   }
 
-  function deleteMentor(id: number) {
-    mentorsStore.update((list) => list.filter(m => m.id !== id));
+  async function updateMentor(e: SubmitEvent) {
+    e.preventDefault();
+    if (!editMentorId || !editName || !editEmail) return;
+    try {
+      await apiFetch(`/admin/users/${editMentorId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: editName, email: editEmail })
+      });
+      mentors = mentors.map(m => m.id === editMentorId ? { ...m, name: editName, email: editEmail } : m);
+      closeEditModal();
+    } catch (err) {
+      alert('Failed to update mentor: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+
+  async function deleteMentor(id: number) {
+    if (!confirm('Are you sure you want to delete this mentor?')) return;
+    try {
+      await apiFetch(`/admin/users/${id}`, { method: 'DELETE' });
+      mentors = mentors.filter(m => m.id !== id);
+    } catch (err) {
+      alert('Failed to delete mentor: ' + (err instanceof Error ? err.message : String(err)));
+    }
   }
 
   function getInitials(name: string) {
@@ -179,7 +223,7 @@
               <td>
                 <div class="actions-row">
                   <button class="action-icon-btn" title="View details"><Icon name="eye" size={14} /></button>
-                  <button class="action-icon-btn" title="Edit mentor"><Icon name="edit" size={14} /></button>
+                  <button class="action-icon-btn" onclick={() => openEditModal(mentor)} title="Edit mentor"><Icon name="edit" size={14} /></button>
                   <button class="action-icon-btn delete" onclick={() => deleteMentor(mentor.id)} title="Delete mentor"><Icon name="x" size={14} /></button>
                 </div>
               </td>
@@ -272,6 +316,32 @@
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
             <button type="submit" class="submit-btn">Save Mentor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Edit Modal Overlay -->
+  {#if showEditModal}
+    <div class="modal-overlay" onclick={closeEditModal} aria-hidden="true">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+        <div class="modal-header">
+          <h3>Edit Mentor Profile</h3>
+          <button class="close-btn" onclick={closeEditModal}>&times;</button>
+        </div>
+        <form onsubmit={updateMentor} class="modal-form">
+          <div class="form-group">
+            <label for="edit-mentor-name">Full Name</label>
+            <input type="text" id="edit-mentor-name" bind:value={editName} required />
+          </div>
+          <div class="form-group">
+            <label for="edit-mentor-email">Email Address</label>
+            <input type="email" id="edit-mentor-email" bind:value={editEmail} required />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="cancel-btn" onclick={closeEditModal}>Cancel</button>
+            <button type="submit" class="submit-btn">Save Changes</button>
           </div>
         </form>
       </div>

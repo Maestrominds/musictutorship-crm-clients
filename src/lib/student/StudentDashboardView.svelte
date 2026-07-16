@@ -1,12 +1,28 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
 
   let { dashboardData = null } = $props();
 
-  // Fallback to mocks if no database data is found
-  const enrolledCourse = $derived(
-    dashboardData?.upcoming_classes?.[0]?.course_title || 'Classical Piano'
-  );
+  let activeCourseName = $state('Classical Piano');
+  let activeMentorName = $state('Assigned Mentor');
+  let activeCourseProgress = $state(0);
+
+  onMount(async () => {
+    try {
+      const courses = await apiGet<any[]>('/student/courses');
+      if (courses && courses.length > 0) {
+        activeCourseName = courses[0].course_title || 'Classical Piano';
+        activeMentorName = courses[0].mentor_name || 'Assigned Mentor';
+        activeCourseProgress = courses[0].progress_percent || 0;
+      }
+    } catch (err) {
+      console.error('Failed to load student courses for dashboard:', err);
+    }
+  });
+
+  const enrolledCourse = $derived(activeCourseName);
 
   const nextClassTime = $derived(
     dashboardData?.upcoming_classes?.[0]?.scheduled_at
@@ -17,20 +33,18 @@
           hour: 'numeric',
           minute: '2-digit'
         })
-      : 'Today, 4:00 PM'
+      : 'No upcoming classes scheduled'
   );
 
   const nextClassTitle = $derived(
-    dashboardData?.upcoming_classes?.[0]?.title || 'Advanced Chord Structures'
+    dashboardData?.upcoming_classes?.[0]?.title || 'Practice Session'
   );
 
   const nextClassLink = $derived(
     dashboardData?.upcoming_classes?.[0]?.gmeet_link || '#'
   );
 
-  const mentorName = $derived(
-    dashboardData?.upcoming_classes?.[0]?.mentor_name || 'Prof. Alex Johnson'
-  );
+  const mentorName = $derived(activeMentorName);
 
   // NOTE: activities require GET /api/student/activity — not yet implemented (see backend_dev_todo.md)
   const activities: { type: string; detail: string; time: string; color: string }[] = [];
@@ -59,8 +73,7 @@
       <div class="stat-icon green-bg"><Icon name="trending-up" size={20} /></div>
       <div class="stat-info">
         <span class="label">COURSE PROGRESS</span>
-        <!-- NOTE: requires GET /api/student/courses — see backend_dev_todo.md #12 -->
-        <div class="value">{dashboardData?.progress_percent != null ? `${dashboardData.progress_percent}%` : '—'}</div>
+        <div class="value">{activeCourseProgress}%</div>
       </div>
     </div>
   </section>

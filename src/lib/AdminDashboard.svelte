@@ -29,21 +29,58 @@
   let upcomingClasses = $state<{ date: string; name: string; time: string; mentor: string }[]>([]);
   let recentPayments = $state<{ id: string; student: string; amount: string; date: string; status: string }[]>([]);
 
-  // NOTE: GET /api/admin/stats is not yet implemented — see backend_dev_todo.md #1
-  // NOTE: GET /api/admin/leads is not yet implemented — see backend_dev_todo.md #2
-  // NOTE: GET /api/admin/classes is not yet implemented — see backend_dev_todo.md #7
-  // NOTE: GET /api/admin/payments is not yet implemented — see backend_dev_todo.md #6
   onMount(async () => {
-    // Attempt to fetch leads for recent leads widget
+    try {
+      const statsRes = await apiGet<any>('/admin/stats');
+      stats = {
+        totalLeads: statsRes.total_leads || 0,
+        activeStudents: statsRes.active_students || 0,
+        upcomingTrials: statsRes.upcoming_trials || 0,
+        monthlyRevenue: Number(statsRes.monthly_revenue) || 0
+      };
+    } catch (err) {
+      console.error('Failed to fetch admin stats:', err);
+    }
+
     try {
       const leads = await apiGet<any[]>('/admin/leads');
       recentLeads = (leads || []).slice(0, 5).map(l => ({
         name: l.name,
         email: l.email,
-        status: l.status || 'New',
+        status: l.mapped_status || 'New',
         created_at: l.created_at ? new Date(l.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
       }));
-    } catch { /* endpoint pending */ }
+    } catch (err) {
+      console.error('Failed to fetch admin leads:', err);
+    }
+
+    try {
+      const classes = await apiGet<any[]>('/admin/classes');
+      upcomingClasses = (classes || []).slice(0, 5).map(c => {
+        const dt = new Date(c.scheduled_at);
+        return {
+          date: dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          name: c.course_title,
+          time: dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          mentor: c.mentor_name
+        };
+      });
+    } catch (err) {
+      console.error('Failed to fetch admin classes:', err);
+    }
+
+    try {
+      const payments = await apiGet<any[]>('/admin/payments');
+      recentPayments = (payments || []).slice(0, 5).map(p => ({
+        id: String(p.id),
+        student: p.student_name,
+        amount: `$${p.amount}`,
+        date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
+        status: 'Completed'
+      }));
+    } catch (err) {
+      console.error('Failed to fetch admin payments:', err);
+    }
   });
 </script>
 

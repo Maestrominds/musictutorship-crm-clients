@@ -16,8 +16,24 @@
     }))
   );
 
-  // NOTE: GET /api/student/past-classes is not yet implemented. See backend_dev_todo.md #14
-  const pastClasses: { title: string; focus: string; mentor: string; date: string }[] = [];
+  import { onMount } from 'svelte';
+  import { apiGet } from '$lib/api';
+
+  let pastClasses = $state<{ title: string; focus: string; mentor: string; date: string }[]>([]);
+
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/student/past-classes');
+      pastClasses = (data || []).map(c => ({
+        title: c.title || 'Music Session',
+        focus: 'Completed Class',
+        mentor: c.mentor_name || 'Assigned Mentor',
+        date: c.scheduled_at ? new Date(c.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
+      }));
+    } catch (err) {
+      console.error('Failed to load past classes:', err);
+    }
+  });
 </script>
 
 

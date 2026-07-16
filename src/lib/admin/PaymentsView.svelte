@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet } from '$lib/api';
+  import { apiGet, apiFetch } from '$lib/api';
   import type { Student } from '../dataStore';
 
   let students = $state<Student[]>([]);
@@ -134,7 +134,26 @@
               </td>
               <td class="date-text">{transaction.paymentDate}</td>
               <td>
-                <button class="action-btn">•••</button>
+                <select 
+                  value={transaction.paymentStatus} 
+                  onchange={async (e) => {
+                    const newStatus = (e.target as HTMLSelectElement).value;
+                    try {
+                      await apiFetch(`/admin/payments/${transaction.id}/status`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ status: newStatus })
+                      });
+                      transaction.paymentStatus = newStatus as any;
+                    } catch (err) {
+                      alert('Failed to update payment status: ' + (err instanceof Error ? err.message : String(err)));
+                    }
+                  }}
+                  style="padding: 4px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem; background: white;"
+                >
+                  <option value="Paid">Paid</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Failed">Failed</option>
+                </select>
               </td>
             </tr>
           {/each}
