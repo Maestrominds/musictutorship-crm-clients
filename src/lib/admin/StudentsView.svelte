@@ -7,10 +7,27 @@
   let students = $state<Student[]>([]);
   let isLoading = $state(true);
 
+  // Helper to extract string from pgtype objects or raw values
+  function safeString(val: any): string {
+    if (!val) return '';
+    if (typeof val === 'object') {
+      if ('String' in val) return val.String;
+      if ('Time' in val) return val.Time;
+    }
+    return String(val);
+  }
+
   onMount(async () => {
     try {
-      const data = await apiGet<Student[]>('/admin/students');
-      students = data || [];
+      const data = await apiGet<any[]>('/admin/students');
+      students = (data || []).map(s => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        course_title: safeString(s.course_title),
+        mentor_name: s.mentor_name || '',
+        enrolled_at: s.enrolled_at ? safeString(s.enrolled_at) : ''
+      }));
     } catch {
       students = []; // Not yet available — show empty state
     } finally {

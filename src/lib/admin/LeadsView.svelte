@@ -140,7 +140,6 @@
         <select id="status-filter" bind:value={filterStatus}>
           <option value="All">All</option>
           <option value="New">New</option>
-          <option value="In Review">In Review</option>
           <option value="Contacted">Contacted</option>
         </select>
       </div>
@@ -222,7 +221,6 @@
                     style="padding: 4px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem; background: white;"
                   >
                     <option value="New">New</option>
-                    <option value="In Review">In Review</option>
                     <option value="Contacted">Contacted</option>
                   </select>
                   {#if lead.status !== 'Contacted'}

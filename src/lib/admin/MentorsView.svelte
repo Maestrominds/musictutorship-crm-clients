@@ -33,6 +33,14 @@
   let sortBy = $state('Name');
   let showModal = $state(false);
 
+  // View Mode state
+  let viewMode = $state<'table' | 'grid'>('table');
+  let activeDropdownId = $state<number | null>(null);
+
+  // View Modal state
+  let showViewModal = $state(false);
+  let selectedMentor = $state<Mentor | null>(null);
+
   // Form states
   let newName = $state('');
   let newRole = $state('Instructor');
@@ -78,6 +86,32 @@
     showEditModal = true;
   }
   function closeEditModal() { showEditModal = false; editMentorId = null; }
+
+  function openViewModal(mentor: Mentor) {
+    selectedMentor = mentor;
+    showViewModal = true;
+  }
+  function closeViewModal() { showViewModal = false; selectedMentor = null; }
+
+  function toggleDropdown(id: number, event: MouseEvent) {
+    event.stopPropagation();
+    activeDropdownId = activeDropdownId === id ? null : id;
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('click', () => {
+      activeDropdownId = null;
+    });
+  }
+
+  async function toggleMentorStatus(mentor: Mentor) {
+    const newStatus = mentor.status === 'Active' ? 'Inactive' : 'Active';
+    try {
+      mentor.status = newStatus;
+    } catch (err) {
+      alert('Failed to update status');
+    }
+  }
 
   function addMentor(e: SubmitEvent) {
     e.preventDefault();
@@ -137,8 +171,8 @@
     </div>
     <div class="header-actions">
       <div class="toggle-group">
-        <button class="toggle-btn active">Table</button>
-        <button class="toggle-btn">Grid</button>
+        <button class="toggle-btn" class:active={viewMode === 'table'} onclick={() => viewMode = 'table'}>Table</button>
+        <button class="toggle-btn" class:active={viewMode === 'grid'} onclick={() => viewMode = 'grid'}>Grid</button>
       </div>
       <button class="add-mentor-btn" onclick={openModal}>
         <span><Icon name="plus" size={14} /></span> Add Mentor
@@ -180,70 +214,119 @@
     </button>
   </div>
 
-  <div class="table-card">
-    <table class="mentors-table">
-      <thead>
-        <tr>
-          <th>MENTOR NAME</th>
-          <th>SPECIALTY</th>
-          <th>CONTACT</th>
-          <th>STUDENTS</th>
-          <th>STATUS</th>
-          <th>ACTIONS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if filteredMentors.length === 0}
+  {#if viewMode === 'table'}
+    <div class="table-card">
+      <table class="mentors-table">
+        <thead>
           <tr>
-            <td colspan="6" class="empty-row">No mentors found matching your filters.</td>
+            <th>MENTOR NAME</th>
+            <th>SPECIALTY</th>
+            <th>CONTACT</th>
+            <th>STUDENTS</th>
+            <th>STATUS</th>
+            <th>ACTIONS</th>
           </tr>
-        {:else}
-          {#each filteredMentors as mentor}
+        </thead>
+        <tbody>
+          {#if filteredMentors.length === 0}
             <tr>
-              <td class="user-cell">
-                <div class="avatar-circle">{getInitials(mentor.name)}</div>
-                <div class="user-details">
-                  <span class="name">{mentor.name}</span>
-                  <span class="role">{mentor.role}</span>
-                </div>
-              </td>
-              <td>
-                <span class="specialty-badge">{mentor.specialty}</span>
-              </td>
-              <td class="contact-cell">
-                <div class="email">{mentor.email}</div>
-                <div class="phone">{mentor.phone}</div>
-              </td>
-              <td class="student-count">{mentor.studentCount}</td>
-              <td>
-                <span class="status-indicator" class:active={mentor.status === 'Active'} class:inactive={mentor.status === 'Inactive'}>
-                  {mentor.status}
-                </span>
-              </td>
-              <td>
-                <div class="actions-row">
-                  <button class="action-icon-btn" title="View details"><Icon name="eye" size={14} /></button>
-                  <button class="action-icon-btn" onclick={() => openEditModal(mentor)} title="Edit mentor"><Icon name="edit" size={14} /></button>
-                  <button class="action-icon-btn delete" onclick={() => deleteMentor(mentor.id)} title="Delete mentor"><Icon name="x" size={14} /></button>
-                </div>
-              </td>
+              <td colspan="6" class="empty-row">No mentors found matching your filters.</td>
             </tr>
-          {/each}
-        {/if}
-      </tbody>
-    </table>
+          {:else}
+            {#each filteredMentors as mentor}
+              <tr>
+                <td class="user-cell">
+                  <div class="avatar-circle">{getInitials(mentor.name)}</div>
+                  <div class="user-details">
+                    <span class="name">{mentor.name}</span>
+                    <span class="role">{mentor.role}</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="specialty-badge">{mentor.specialty}</span>
+                </td>
+                <td class="contact-cell">
+                  <div class="email">{mentor.email}</div>
+                  <div class="phone">{mentor.phone}</div>
+                </td>
+                <td class="student-count">{mentor.studentCount}</td>
+                <td>
+                  <span class="status-indicator" class:active={mentor.status === 'Active'} class:inactive={mentor.status === 'Inactive'}>
+                    {mentor.status}
+                  </span>
+                </td>
+                <td style="position: relative;">
+                  <button onclick={(e) => toggleDropdown(mentor.id, e)} style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px; color: var(--text-main);">•••</button>
+                  {#if activeDropdownId === mentor.id}
+                    <div class="dropdown-menu" style="position: absolute; right: 20px; top: 10px; background: white; border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; z-index: 10; width: 120px;">
+                      <button onclick={() => openViewModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">View Details</button>
+                      <button onclick={() => openEditModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">Edit</button>
+                      <button onclick={() => toggleMentorStatus(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">
+                        {mentor.status === 'Active' ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button onclick={() => deleteMentor(mentor.id)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem; color: #e53e3e;">Delete</button>
+                    </div>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          {/if}
+        </tbody>
+      </table>
 
-    <div class="table-footer">
-      <span class="results-count">Showing 1 to {filteredMentors.length} of {mentors.length} mentors</span>
-      <div class="pagination">
-        <button class="pag-btn prev">◀</button>
-        <button class="pag-btn active">1</button>
-        <button class="pag-btn">2</button>
-        <button class="pag-btn">3</button>
-        <button class="pag-btn next">▶</button>
+      <div class="table-footer">
+        <span class="results-count">Showing 1 to {filteredMentors.length} of {mentors.length} mentors</span>
+        <div class="pagination">
+          <button class="pag-btn prev">◀</button>
+          <button class="pag-btn active">1</button>
+          <button class="pag-btn">2</button>
+          <button class="pag-btn">3</button>
+          <button class="pag-btn next">▶</button>
+        </div>
       </div>
     </div>
-  </div>
+  {:else}
+    <div class="mentors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+      {#each filteredMentors as mentor}
+        <div class="mentor-card" style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <div class="avatar-circle" style="width: 44px; height: 44px; font-size: 1rem;">{getInitials(mentor.name)}</div>
+              <div>
+                <h4 style="margin: 0; font-weight: 700; font-size: 1rem; color: var(--text-main);">{mentor.name}</h4>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">{mentor.role}</span>
+              </div>
+            </div>
+            <!-- Actions Dropdown -->
+            <div class="dropdown-wrapper" style="position: relative;">
+              <button onclick={(e) => toggleDropdown(mentor.id, e)} style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px; color: var(--text-main);">•••</button>
+              {#if activeDropdownId === mentor.id}
+                <div class="dropdown-menu" style="position: absolute; right: 0; top: 24px; background: white; border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; z-index: 10; width: 120px;">
+                  <button onclick={() => openViewModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">View Details</button>
+                  <button onclick={() => openEditModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">Edit</button>
+                  <button onclick={() => toggleMentorStatus(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">
+                    {mentor.status === 'Active' ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button onclick={() => deleteMentor(mentor.id)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem; color: #e53e3e;">Delete</button>
+                </div>
+              {/if}
+            </div>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--text-muted);">
+            <div><strong>Specialty:</strong> <span class="specialty-badge" style="margin-left: 6px;">{mentor.specialty}</span></div>
+            <div><strong>Students:</strong> {mentor.studentCount} active students</div>
+            <div><strong>Email:</strong> {mentor.email}</div>
+            <div><strong>Phone:</strong> {mentor.phone || 'N/A'}</div>
+          </div>
+          
+          <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
+            <span class="status-indicator" class:active={mentor.status === 'Active'} class:inactive={mentor.status === 'Inactive'}>{mentor.status}</span>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   <div class="mentors-stats-grid">
     <div class="stat-card">
@@ -344,6 +427,48 @@
             <button type="submit" class="submit-btn">Save Changes</button>
           </div>
         </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- View Mentor Details Modal -->
+  {#if showViewModal && selectedMentor}
+    <div class="modal-overlay" onclick={closeViewModal} aria-hidden="true">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" style="padding: 24px; max-width: 480px; width: 100%;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 1.25rem;">Mentor Details</h3>
+          <button class="close-btn" onclick={closeViewModal}>&times;</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px; font-size: 0.95rem;">
+          <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 10px;">
+            <div class="avatar-circle" style="width: 50px; height: 50px; font-size: 1.2rem; background: #ebf8ff; color: #2b6cb0;">{getInitials(selectedMentor.name)}</div>
+            <div>
+              <h4 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-main);">{selectedMentor.name}</h4>
+              <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">{selectedMentor.role}</span>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 100px 1fr; gap: 10px; line-height: 1.5;">
+            <strong style="color: var(--text-muted);">Specialty:</strong>
+            <span>{selectedMentor.specialty}</span>
+
+            <strong style="color: var(--text-muted);">Email:</strong>
+            <span>{selectedMentor.email}</span>
+
+            <strong style="color: var(--text-muted);">Phone:</strong>
+            <span>{selectedMentor.phone || 'N/A'}</span>
+
+            <strong style="color: var(--text-muted);">Status:</strong>
+            <span>
+              <span class="status-indicator" class:active={selectedMentor.status === 'Active'} class:inactive={selectedMentor.status === 'Inactive'}>{selectedMentor.status}</span>
+            </span>
+
+            <strong style="color: var(--text-muted);">Students:</strong>
+            <span>{selectedMentor.studentCount} active students</span>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+          <button onclick={closeViewModal} style="padding: 8px 16px; border: 1px solid var(--border-color); border-radius: 4px; background: white; cursor: pointer; font-weight: 600;">Close</button>
+        </div>
       </div>
     </div>
   {/if}

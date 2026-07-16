@@ -7,6 +7,20 @@
   let courses = $state<Course[]>([]);
   let isLoading = $state(true);
 
+  function formatPrice(val: any): string {
+    if (!val) return '0.00';
+    if (typeof val === 'object') {
+      if ('Int' in val && 'Exp' in val) {
+        const exp = val.Exp;
+        // In SQLC/pgtype v5, val.Int is a number/string. Let's extract it.
+        const intVal = val.Int ? Number(val.Int) : 0;
+        return (intVal * Math.pow(10, exp)).toFixed(2);
+      }
+    }
+    const num = Number(val);
+    return isNaN(num) ? '0.00' : num.toFixed(2);
+  }
+
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/admin/courses');
@@ -14,7 +28,7 @@
         id: c.id,
         name: c.title,
         description: c.description,
-        price: `$${c.price}/mo`,
+        price: `$${formatPrice(c.price)}/mo`,
         duration: '',
         mentorName: '',
         isPremium: true
@@ -67,7 +81,7 @@
       const newCourseRes = await apiPost<any>('/admin/courses', {
         title: newName,
         description: newDescription,
-        price: parseFloat(newPrice)
+        price: String(newPrice)
       });
       courses = [...courses, {
         id: newCourseRes.id || Date.now(),
@@ -97,7 +111,7 @@
         body: JSON.stringify({
           title: editName,
           description: editDescription,
-          price: parseFloat(editPrice)
+          price: String(editPrice)
         })
       });
       courses = courses.map(c => c.id === editCourseId ? {
