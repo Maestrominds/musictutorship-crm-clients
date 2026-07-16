@@ -28,6 +28,14 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   });
 
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      if (typeof window !== 'undefined') {
+        alert("Access Denied: Session expired or insufficient permissions. Redirecting to login...");
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
     const error = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(error?.error || `API error ${res.status}`);
   }
