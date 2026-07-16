@@ -229,7 +229,7 @@
                         }}
                         style="padding: 4px 8px; border-radius: 4px; border: none; background: #e53e3e; color: white; font-size: 0.8rem; cursor: pointer;"
                       >
-                        Convert to Student
+                        Contact to Student
                       </button>
                     {:else}
                       <span style="font-size: 0.85rem; color: #38a169; font-weight: 600;">Converted</span>
