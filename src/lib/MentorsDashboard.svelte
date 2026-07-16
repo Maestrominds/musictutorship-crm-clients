@@ -9,11 +9,20 @@
 
   let { data } = $props();
 
-  let activeSubView = $state<'dashboard' | 'students' | 'classes' | 'attendance' | 'profile'>('dashboard');
+  let activeSubView = $state<'dashboard' | 'students' | 'classes' | 'attendance' | 'profile'>(
+    (typeof window !== 'undefined' ? localStorage.getItem('mentorActiveSubView') as any : null) || 'dashboard'
+  );
+
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mentorActiveSubView', activeSubView);
+    }
+  });
 
   function handleLogout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('mentorActiveSubView');
     goto('/login');
   }
 

@@ -8,11 +8,20 @@
 
   let { data } = $props();
 
-  let activeSubView = $state<'dashboard' | 'courses' | 'schedule' | 'payments'>('dashboard');
+  let activeSubView = $state<'dashboard' | 'courses' | 'schedule' | 'payments'>(
+    (typeof window !== 'undefined' ? localStorage.getItem('studentActiveSubView') as any : null) || 'dashboard'
+  );
+
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('studentActiveSubView', activeSubView);
+    }
+  });
 
   function handleLogout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('studentActiveSubView');
     goto('/login');
   }
 

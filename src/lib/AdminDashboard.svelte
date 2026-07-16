@@ -10,11 +10,20 @@
   import MentorsView from './admin/MentorsView.svelte';
   import { apiGet } from './api';
 
-  let activeSubView = $state<'dashboard' | 'leads' | 'trials' | 'students' | 'courses' | 'payments' | 'mentors'>('dashboard');
+  let activeSubView = $state<'dashboard' | 'leads' | 'trials' | 'students' | 'courses' | 'payments' | 'mentors'>(
+    (typeof window !== 'undefined' ? localStorage.getItem('adminActiveSubView') as any : null) || 'dashboard'
+  );
+
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adminActiveSubView', activeSubView);
+    }
+  });
 
   function handleLogout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('adminActiveSubView');
     goto('/login');
   }
 
