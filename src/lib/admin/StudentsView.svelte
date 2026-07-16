@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet, apiFetch } from '$lib/api';
+  import { apiGet, apiFetch, apiPost } from '$lib/api';
   import type { Student } from '../dataStore';
 
   let students = $state<Student[]>([]);
@@ -47,6 +47,41 @@
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  }
+
+  // Add states
+  let showAddModal = $state(false);
+  let newStudentName = $state('');
+  let newStudentEmail = $state('');
+  let isSubmitting = $state(false);
+
+  function openAddModal() { showAddModal = true; }
+  function closeAddModal() { showAddModal = false; newStudentName = ''; newStudentEmail = ''; }
+
+  async function addStudent(e: SubmitEvent) {
+    e.preventDefault();
+    if (!newStudentName || !newStudentEmail) return;
+    isSubmitting = true;
+    try {
+      const res = await apiPost<any>('/admin/users', {
+        name: newStudentName,
+        email: newStudentEmail,
+        role: 'student'
+      });
+      students = [{
+        id: res.id || Date.now(),
+        name: newStudentName,
+        email: newStudentEmail,
+        course_title: '',
+        mentor_name: '',
+        enrolled_at: new Date().toISOString()
+      }, ...students];
+      closeAddModal();
+    } catch (err) {
+      alert('Failed to add student: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isSubmitting = false;
+    }
   }
 
   // Edit states
@@ -95,9 +130,12 @@
       <h2>Students Management</h2>
       <p>View and manage all enrolled students in the academy.</p>
     </div>
-    <div class="header-actions">
+    <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
       <button class="export-btn">
         <span><Icon name="file" size={14} /></span> Export
+      </button>
+      <button class="add-student-btn" onclick={openAddModal} style="background-color: var(--primary); color: white; border: none; border-radius: var(--radius-md); padding: 10px 18px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(229, 62, 62, 0.2);">
+        <span><Icon name="plus" size={14} /></span> Add Student
       </button>
     </div>
   </div>
@@ -195,6 +233,32 @@
             <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
               <button type="button" class="cancel-btn" onclick={closeEditModal} style="padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 4px; background: white; cursor: pointer;">Cancel</button>
               <button type="submit" class="submit-btn" style="padding: 8px 16px; border: none; border-radius: 4px; background: #e53e3e; color: white; cursor: pointer; font-weight: 600;">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Add Student Modal -->
+    {#if showAddModal}
+      <div class="modal-overlay" onclick={closeAddModal} aria-hidden="true" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100;">
+        <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" style="background: white; padding: 24px; border-radius: 8px; width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 1.2rem;">Add New Student</h3>
+            <button class="close-btn" onclick={closeAddModal} style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+          </div>
+          <form onsubmit={addStudent} class="modal-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+              <label for="new-student-name" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Full Name</label>
+              <input type="text" id="new-student-name" bind:value={newStudentName} placeholder="John Doe" style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;" required />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+              <label for="new-student-email" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Email Address</label>
+              <input type="email" id="new-student-email" bind:value={newStudentEmail} placeholder="john@example.com" style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;" required />
+            </div>
+            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+              <button type="button" class="cancel-btn" onclick={closeAddModal} style="padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 4px; background: white; cursor: pointer;">Cancel</button>
+              <button type="submit" class="submit-btn" style="padding: 8px 16px; border: none; border-radius: 4px; background: #e53e3e; color: white; cursor: pointer; font-weight: 600;">Save Student</button>
             </div>
           </form>
         </div>
