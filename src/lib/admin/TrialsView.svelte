@@ -45,6 +45,9 @@
     })
   );
 
+  const totalTrials = $derived(trials.length);
+  const pendingTrials = $derived(trials.filter(t => t.status === 'Scheduled').length);
+
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 1);
   }
@@ -88,15 +91,15 @@
   <div class="trials-stats-grid">
     <div class="trial-stat-card">
       <div class="stat-main">
-        <div class="value">42</div>
-        <span class="trend positive">↗ +12% from last week</span>
+        <div class="value">{totalTrials}</div>
+        <span class="trend">↗ total scheduled</span>
       </div>
       <div class="label">Total Trials (This week)</div>
     </div>
     
     <div class="trial-stat-card">
       <div class="stat-main">
-        <div class="value">08</div>
+        <div class="value">{pendingTrials}</div>
         <span class="trend warning"><Icon name="info" size={12} /> Requires action</span>
       </div>
       <div class="label">Pending Trials</div>
@@ -104,16 +107,16 @@
 
     <div class="trial-stat-card">
       <div class="stat-main">
-        <div class="value">64%</div>
-        <span class="trend positive"><Icon name="plus" size={12} /> 27 New enrollments</span>
+        <div class="value">N/A</div>
+        <span class="trend">Requires conversion endpoint</span>
       </div>
       <div class="label">Conversion Rate</div>
     </div>
 
     <div class="trial-stat-card">
       <div class="stat-main">
-        <div class="value">15</div>
-        <span class="trend neutral"><Icon name="check-circle" size={12} /> Fully staffed</span>
+        <div class="value">N/A</div>
+        <span class="trend">Requires availability endpoint</span>
       </div>
       <div class="label">Available Mentors</div>
     </div>
