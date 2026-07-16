@@ -17,6 +17,9 @@
     return String(val);
   }
 
+  let coursesList = $state<{ id: number; title: string }[]>([]);
+  let selectedCourseId = $state<number | null>(null);
+
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/admin/students');
@@ -29,7 +32,17 @@
         enrolled_at: s.enrolled_at ? safeString(s.enrolled_at) : ''
       }));
     } catch {
-      students = []; // Not yet available — show empty state
+      students = [];
+    }
+
+    try {
+      const coursesData = await apiGet<any[]>('/admin/courses');
+      coursesList = (coursesData || []).map(c => ({ id: c.id, title: c.title }));
+      if (coursesList.length > 0) {
+        selectedCourseId = coursesList[0].id;
+      }
+    } catch (err) {
+      console.error('Failed to load courses in StudentsView:', err);
     } finally {
       isLoading = false;
     }
@@ -63,16 +76,36 @@
     if (!newStudentName || !newStudentEmail) return;
     isSubmitting = true;
     try {
+      // 1. Create the student user
       const res = await apiPost<any>('/admin/users', {
         name: newStudentName,
         email: newStudentEmail,
         role: 'student'
       });
+      const userId = res.id;
+
+      // 2. Assign selected course to student
+      let courseTitle = '';
+      if (selectedCourseId && userId) {
+        try {
+          await apiPost('/admin/assign', {
+            user_id: userId,
+            course_id: selectedCourseId
+          });
+          const matchedCourse = coursesList.find(c => c.id === selectedCourseId);
+          if (matchedCourse) {
+            courseTitle = matchedCourse.title;
+          }
+        } catch (err) {
+          console.error('User created, but course assignment failed:', err);
+        }
+      }
+
       students = [{
-        id: res.id || Date.now(),
+        id: userId || Date.now(),
         name: newStudentName,
         email: newStudentEmail,
-        course_title: '',
+        course_title: courseTitle,
         mentor_name: '',
         enrolled_at: new Date().toISOString()
       }, ...students];
@@ -255,6 +288,15 @@
             <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
               <label for="new-student-email" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Email Address</label>
               <input type="email" id="new-student-email" bind:value={newStudentEmail} placeholder="john@example.com" style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;" required />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+              <label for="new-student-course" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Assign Course</label>
+              <select id="new-student-course" bind:value={selectedCourseId} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; background: white;">
+                <option value={null}>None (Create without Course)</option>
+                {#each coursesList as course}
+                  <option value={course.id}>{course.title}</option>
+                {/each}
+              </select>
             </div>
             <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
               <button type="button" class="cancel-btn" onclick={closeAddModal} style="padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 4px; background: white; cursor: pointer;">Cancel</button>

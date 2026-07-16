@@ -204,25 +204,6 @@
               <td class="date-text">{lead.createdDate}</td>
               <td>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                  <select 
-                    value={lead.status} 
-                    onchange={async (e) => {
-                      const newStatus = (e.target as HTMLSelectElement).value;
-                      try {
-                        await apiFetch(`/admin/leads/${lead.id}/status`, {
-                          method: 'PATCH',
-                          body: JSON.stringify({ status: newStatus })
-                        });
-                        lead.status = newStatus as any;
-                      } catch (err) {
-                        alert('Failed to update status: ' + (err instanceof Error ? err.message : String(err)));
-                      }
-                    }}
-                    style="padding: 4px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem; background: white;"
-                  >
-                    <option value="New">New</option>
-                    <option value="Contacted">Contacted</option>
-                  </select>
                   {#if lead.status !== 'Contacted'}
                     <button 
                       onclick={async () => {
@@ -235,8 +216,10 @@
                       }}
                       style="padding: 4px 8px; border-radius: 4px; border: none; background: #e53e3e; color: white; font-size: 0.8rem; cursor: pointer;"
                     >
-                      Convert
+                      Convert to Student
                     </button>
+                  {:else}
+                    <span style="font-size: 0.85rem; color: #38a169; font-weight: 600;">Converted</span>
                   {/if}
                 </div>
               </td>
