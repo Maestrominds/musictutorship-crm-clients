@@ -123,160 +123,175 @@
     </button>
   </div>
 
-  <!-- Filter and Search Bar -->
-  <div class="filter-bar-card">
-    <div class="search-input-wrapper">
-      <span class="search-icon"><Icon name="search" size={15} /></span>
-      <input 
-        type="text" 
-        placeholder="Search leads by name, email or phone..." 
-        bind:value={searchQuery}
-      />
+  {#if isLoading}
+    <div class="loading-spinner-container">
+      <div class="spinner"></div>
+      <span>Loading leads...</span>
     </div>
-
-    <div class="dropdowns-group">
-      <div class="select-wrapper">
-        <label for="status-filter">Status:</label>
-        <select id="status-filter" bind:value={filterStatus}>
-          <option value="All">All</option>
-          <option value="New">New</option>
-          <option value="Contacted">Contacted</option>
-        </select>
+  {:else}
+    <!-- Filter and Search Bar -->
+    <div class="filter-bar-card">
+      <div class="search-input-wrapper">
+        <span class="search-icon"><Icon name="search" size={15} /></span>
+        <input 
+          type="text" 
+          placeholder="Search leads by name, email or phone..." 
+          bind:value={searchQuery}
+        />
       </div>
 
-      <div class="select-wrapper">
-        <label for="course-filter">Course:</label>
-        <select id="course-filter" bind:value={filterCourse}>
-          <option value="All">All</option>
-          <option value="Classical Piano">Classical Piano</option>
-          <option value="Vocal Mastery">Vocal Mastery</option>
-          <option value="Guitar Theory">Guitar Theory</option>
-        </select>
+      <div class="dropdowns-group">
+        <div class="select-wrapper">
+          <label for="status-filter">Status:</label>
+          <select id="status-filter" bind:value={filterStatus}>
+            <option value="All">All</option>
+            <option value="New">New</option>
+            <option value="Contacted">Contacted</option>
+          </select>
+        </div>
+
+        <div class="select-wrapper">
+          <label for="course-filter">Course:</label>
+          <select id="course-filter" bind:value={filterCourse}>
+            <option value="All">All</option>
+            <option value="Classical Piano">Classical Piano</option>
+            <option value="Vocal Mastery">Vocal Mastery</option>
+            <option value="Guitar Theory">Guitar Theory</option>
+          </select>
+        </div>
+
+        <div class="layout-toggle-group">
+          <button class="toggle-icon-btn active" title="List View">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <button class="toggle-icon-btn" title="Kanban Board">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h6v16H4zm10 0h6v16h-6z" />
+            </svg>
+          </button>
+        </div>
       </div>
-
-      <button class="icon-filter-btn">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 6h16M6 12h12M10 18h4" />
-        </svg>
-      </button>
     </div>
-  </div>
 
-  <!-- Table Card -->
-  <div class="table-card">
-    <table class="leads-table">
-      <thead>
-        <tr>
-          <th>NAME</th>
-          <th>CONTACT INFO</th>
-          <th>COURSE INTERESTED</th>
-          <th>STATUS</th>
-          <th>CREATED DATE</th>
-          <th>ACTIONS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if filteredLeads.length === 0}
+    <!-- Table Card -->
+    <div class="table-card">
+      <table class="leads-table">
+        <thead>
           <tr>
-            <td colspan="6" class="empty-row">No leads found matching your criteria.</td>
+            <th>NAME</th>
+            <th>CONTACT INFO</th>
+            <th>COURSE INTERESTED</th>
+            <th>STATUS</th>
+            <th>CREATED DATE</th>
+            <th>ACTIONS</th>
           </tr>
-        {:else}
-          {#each filteredLeads as lead}
+        </thead>
+        <tbody>
+          {#if filteredLeads.length === 0}
             <tr>
-              <td>
-                <div class="name-cell-inner">
-                  <div class="avatar-circle">{getInitials(lead.name)}</div>
-                  <span class="name-text">{lead.name}</span>
-                </div>
-              </td>
-              <td>
-                <div class="contact-cell-inner">
-                  <div class="phone-text">{lead.phone}</div>
-                  <div class="email-text">{lead.email}</div>
-                </div>
-              </td>
-              <td class="course-text">{lead.course}</td>
-              <td>
-                <span class="status-badge" class:new={lead.status === 'New'} class:in-review={lead.status === 'In Review'} class:contacted={lead.status === 'Contacted'}>
-                  {lead.status}
-                </span>
-              </td>
-              <td class="date-text">{lead.createdDate}</td>
-              <td>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                  {#if lead.status !== 'Contacted'}
-                    <button 
-                      onclick={async () => {
-                        try {
-                          await apiPost(`/admin/leads/${lead.id}/convert`, {});
-                          lead.status = 'Contacted';
-                        } catch (err) {
-                          alert('Failed to convert lead: ' + (err instanceof Error ? err.message : String(err)));
-                        }
-                      }}
-                      style="padding: 4px 8px; border-radius: 4px; border: none; background: #e53e3e; color: white; font-size: 0.8rem; cursor: pointer;"
-                    >
-                      Convert to Student
-                    </button>
-                  {:else}
-                    <span style="font-size: 0.85rem; color: #38a169; font-weight: 600;">Converted</span>
-                  {/if}
-                </div>
-              </td>
+              <td colspan="6" class="empty-row">No leads found matching your criteria.</td>
             </tr>
-          {/each}
-        {/if}
-      </tbody>
-    </table>
+          {:else}
+            {#each filteredLeads as lead}
+              <tr>
+                <td>
+                  <div class="name-cell-inner">
+                    <div class="avatar-circle">{getInitials(lead.name)}</div>
+                    <span class="name-text">{lead.name}</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="contact-cell-inner">
+                    <div class="phone-text">{lead.phone}</div>
+                    <div class="email-text">{lead.email}</div>
+                  </div>
+                </td>
+                <td class="course-text">{lead.course}</td>
+                <td>
+                  <span class="status-badge" class:new={lead.status === 'New'} class:in-review={lead.status === 'In Review'} class:contacted={lead.status === 'Contacted'}>
+                    {lead.status}
+                  </span>
+                </td>
+                <td class="date-text">{lead.createdDate}</td>
+                <td>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    {#if lead.status !== 'Contacted'}
+                      <button 
+                        onclick={async () => {
+                          try {
+                            await apiPost(`/admin/leads/${lead.id}/convert`, {});
+                            lead.status = 'Contacted';
+                          } catch (err) {
+                            alert('Failed to convert lead: ' + (err instanceof Error ? err.message : String(err)));
+                          }
+                        }}
+                        style="padding: 4px 8px; border-radius: 4px; border: none; background: #e53e3e; color: white; font-size: 0.8rem; cursor: pointer;"
+                      >
+                        Convert to Student
+                      </button>
+                    {:else}
+                      <span style="font-size: 0.85rem; color: #38a169; font-weight: 600;">Converted</span>
+                    {/if}
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          {/if}
+        </tbody>
+      </table>
 
-    <div class="table-footer">
-      <span class="results-count">Showing 1 to {filteredLeads.length} of {leads.length} leads</span>
-      <div class="pagination">
-        <button class="pag-btn prev">◀</button>
-        <button class="pag-btn active">1</button>
-        <button class="pag-btn">2</button>
-        <button class="pag-btn">3</button>
-        <span class="pag-dots">...</span>
-        <button class="pag-btn">9</button>
-        <button class="pag-btn next">▶</button>
+      <div class="table-footer">
+        <span class="results-count">Showing 1 to {filteredLeads.length} of {leads.length} leads</span>
+        <div class="pagination">
+          <button class="pag-btn prev">◀</button>
+          <button class="pag-btn active">1</button>
+          <button class="pag-btn">2</button>
+          <button class="pag-btn">3</button>
+          <button class="pag-btn">4</button>
+          <span class="dots">...</span>
+          <button class="pag-btn">9</button>
+          <button class="pag-btn next">▶</button>
+        </div>
       </div>
-    </div>
-  </div>
-
-  <!-- Bottom Stats Grid -->
-  <div class="leads-stats-grid">
-    <div class="lead-stat-card">
-      <div class="stat-main">
-        <div class="value">1,284</div>
-        <span class="trend positive">↗ +12%</span>
-      </div>
-      <div class="label">TOTAL LEADS</div>
-    </div>
-    
-    <div class="lead-stat-card">
-      <div class="stat-main">
-        <div class="value">42</div>
-        <span class="trend neutral">In review</span>
-      </div>
-      <div class="label">ACTIVE PIPELINE</div>
     </div>
 
-    <div class="lead-stat-card">
-      <div class="stat-main">
-        <div class="value">28.4%</div>
-        <span class="trend positive">↗ Optimized</span>
+    <!-- Bottom Stats Grid -->
+    <div class="leads-stats-grid">
+      <div class="lead-stat-card">
+        <div class="stat-main">
+          <div class="value">1,284</div>
+          <span class="trend positive">↗ +12%</span>
+        </div>
+        <div class="label">TOTAL LEADS</div>
       </div>
-      <div class="label">CONV. RATE</div>
-    </div>
+      
+      <div class="lead-stat-card">
+        <div class="stat-main">
+          <div class="value">42</div>
+          <span class="trend neutral">In review</span>
+        </div>
+        <div class="label">ACTIVE PIPELINE</div>
+      </div>
 
-    <div class="lead-stat-card">
-      <div class="stat-main">
-        <div class="value">1.2h</div>
-        <span class="trend positive">Top performance</span>
+      <div class="lead-stat-card">
+        <div class="stat-main">
+          <div class="value">28.4%</div>
+          <span class="trend positive">↗ Optimized</span>
+        </div>
+        <div class="label">CONV. RATE</div>
       </div>
-      <div class="label">AVG. RESPONSE</div>
+
+      <div class="lead-stat-card">
+        <div class="stat-main">
+          <div class="value">1.2h</div>
+          <span class="trend positive">Top performance</span>
+        </div>
+        <div class="label">AVG. RESPONSE</div>
+      </div>
     </div>
-  </div>
+  {/if}
 
   <!-- Add Lead Modal Overlay -->
   {#if showAddModal}

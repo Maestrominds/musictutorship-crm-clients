@@ -13,6 +13,7 @@
   import { apiGet } from '$lib/api';
 
   let paymentsList = $state<StudentPayment[]>([]);
+  let isLoading = $state(true);
 
   onMount(async () => {
     try {
@@ -27,6 +28,8 @@
       }));
     } catch (err) {
       console.error('Failed to load payments:', err);
+    } finally {
+      isLoading = false;
     }
   });
 
@@ -49,94 +52,101 @@
   </div>
 
   <!-- Stats cards -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <span class="label">TOTAL PAID</span>
-      <div class="value">${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-      <span class="trend positive">↗ {paymentCount} payments total</span>
+  {#if isLoading}
+    <div class="loading-spinner-container">
+      <div class="spinner"></div>
+      <span>Loading payments...</span>
     </div>
+  {:else}
+    <div class="stats-row">
+      <div class="stat-card">
+        <span class="label">TOTAL PAID</span>
+        <div class="value">${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        <span class="trend positive">↗ {paymentCount} payments total</span>
+      </div>
 
-    <div class="stat-card">
-      <span class="label">OUTSTANDING BALANCE</span>
-      <div class="value">$0.00</div>
-      <span class="trend">⏳ No pending invoices</span>
-    </div>
+      <div class="stat-card">
+        <span class="label">OUTSTANDING BALANCE</span>
+        <div class="value">$0.00</div>
+        <span class="trend">⏳ No pending invoices</span>
+      </div>
 
-    <div class="stat-card">
-      <span class="label">NEXT PAYMENT DATE</span>
-      <div class="value">N/A</div>
-      <span class="trend"><Icon name="activity" size={12} /> Billing managed by Admin</span>
-    </div>
-  </div>
-
-  <div class="table-card">
-    <div class="table-card-header">
-      <h3>Payment History</h3>
-      <div class="actions">
-        <button class="icon-btn">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 6h16M6 12h12M10 18h4" />
-          </svg>
-        </button>
-        <button class="icon-btn">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+      <div class="stat-card">
+        <span class="label">NEXT PAYMENT DATE</span>
+        <div class="value">N/A</div>
+        <span class="trend"><Icon name="activity" size={12} /> Billing managed by Admin</span>
       </div>
     </div>
 
-    <div class="table-responsive">
-      <table class="history-table">
-        <thead>
-          <tr>
-            <th>COURSE NAME</th>
-            <th>AMOUNT</th>
-            <th>PAYMENT METHOD</th>
-            <th>STATUS</th>
-            <th>DATE</th>
-            <th>ACTION</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each payments as pay}
+    <div class="table-card">
+      <div class="table-card-header">
+        <h3>Payment History</h3>
+        <div class="actions">
+          <button class="icon-btn">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 6h16M6 12h12M10 18h4" />
+            </svg>
+          </button>
+          <button class="icon-btn">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="history-table">
+          <thead>
             <tr>
-              <td class="course-cell">
-                <span class="course-icon"><Icon name="music" size={16} /></span>
-                <div class="course-info">
-                  <span class="name">{pay.courseName}</span>
-                </div>
-              </td>
-              <td class="amount-text">{pay.amount}</td>
-              <td class="method-text">
-                <span class="card-icon"><Icon name="credit-card" size={14} /></span> {pay.method}
-              </td>
-              <td>
-                <span class="status-badge present">{pay.status}</span>
-              </td>
-              <td class="date-text">{pay.date}</td>
-              <td>
-                <button class="action-btn">•••</button>
-              </td>
+              <th>COURSE NAME</th>
+              <th>AMOUNT</th>
+              <th>PAYMENT METHOD</th>
+              <th>STATUS</th>
+              <th>DATE</th>
+              <th>ACTION</th>
             </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {#each paymentsList as pay}
+              <tr>
+                <td class="course-cell">
+                  <span class="course-icon"><Icon name="music" size={16} /></span>
+                  <div class="course-info">
+                    <span class="name">{pay.courseName}</span>
+                  </div>
+                </td>
+                <td class="amount-text">{pay.amount}</td>
+                <td class="method-text">
+                  <span class="card-icon"><Icon name="credit-card" size={14} /></span> {pay.method}
+                </td>
+                <td>
+                  <span class="status-badge present">{pay.status}</span>
+                </td>
+                <td class="date-text">{pay.date}</td>
+                <td>
+                  <button class="action-btn">•••</button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
 
-    <div class="table-footer">
-      <span class="results-count">Showing 1-{payments.length} of 24 transactions</span>
-      <div class="pagination">
-        <button class="pag-btn prev">◀</button>
-        <button class="pag-btn active">1</button>
-        <button class="pag-btn">2</button>
-        <button class="pag-btn">3</button>
-        <span class="pag-dots">...</span>
-        <button class="pag-btn">9</button>
-        <button class="pag-btn next">▶</button>
+      <div class="table-footer">
+        <span class="results-count">Showing 1-{paymentsList.length} of {paymentsList.length} transactions</span>
+        <div class="pagination">
+          <button class="pag-btn prev">◀</button>
+          <button class="pag-btn active">1</button>
+          <button class="pag-btn">2</button>
+          <button class="pag-btn">3</button>
+          <span class="pag-dots">...</span>
+          <button class="pag-btn">9</button>
+          <button class="pag-btn next">▶</button>
+        </div>
       </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>
