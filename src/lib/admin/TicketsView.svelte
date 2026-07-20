@@ -34,6 +34,7 @@
   let newMessage = $state('');
   let ws: WebSocket | null = null;
   let isChatLoading = $state(false);
+  let studentsMap = $state<Record<number, string>>({});
 
   onMount(async () => {
     const userJson = localStorage.getItem('user');
@@ -41,6 +42,19 @@
       try {
         currentUserId = JSON.parse(userJson).id;
       } catch(e) {}
+    }
+
+    try {
+      const studentsData = await apiGet<any[]>('/admin/students');
+      if (studentsData) {
+        const tempMap: Record<number, string> = {};
+        studentsData.forEach(s => {
+          tempMap[s.id] = s.name;
+        });
+        studentsMap = tempMap;
+      }
+    } catch (err) {
+      console.warn('Failed to load students mapping:', err);
     }
 
     try {
@@ -176,7 +190,7 @@
           <tr>
             <th>ID</th>
             <th>SUBJECT</th>
-            <th>STUDENT ID</th>
+            <th>STUDENT NAME</th>
             <th>STATUS</th>
             <th>PRIORITY</th>
             <th>ACTIONS</th>
@@ -190,7 +204,7 @@
             <tr>
               <td>#{ticket.id}</td>
               <td class="subject-cell">{ticket.subject}</td>
-              <td>{ticket.student_id}</td>
+              <td>{studentsMap[ticket.student_id] || `Student #${ticket.student_id}`}</td>
               <td>
                 <span class="status-badge" 
                   class:open={ticket.status === 'Open'} 
