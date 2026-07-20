@@ -8,11 +8,23 @@
   import CoursesView from './admin/CoursesView.svelte';
   import PaymentsView from './admin/PaymentsView.svelte';
   import MentorsView from './admin/MentorsView.svelte';
+  import TicketsView from './admin/TicketsView.svelte';
+  import SkeletonLoader from './SkeletonLoader.svelte';
   import { apiGet } from './api';
 
-  let activeSubView = $state<'dashboard' | 'leads' | 'trials' | 'students' | 'courses' | 'payments' | 'mentors'>(
+  let activeSubView = $state<'dashboard' | 'leads' | 'trials' | 'students' | 'courses' | 'payments' | 'mentors' | 'tickets'>(
     (typeof window !== 'undefined' ? localStorage.getItem('adminActiveSubView') as any : null) || 'dashboard'
   );
+  let isPageTransitioning = $state(false);
+
+  function navigateTo(view: typeof activeSubView) {
+    if (view === activeSubView) return;
+    isPageTransitioning = true;
+    setTimeout(() => {
+      activeSubView = view;
+      isPageTransitioning = false;
+    }, 180);
+  }
 
   $effect(() => {
     if (typeof window !== 'undefined') {
@@ -85,7 +97,7 @@
         student: p.student_name,
         amount: `$${p.amount}`,
         date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
-        status: 'Completed'
+        status: 'Paid'
       }));
     } catch (err) {
       console.error('Failed to fetch admin payments:', err);
@@ -110,15 +122,16 @@
     </div>
 
     <nav class="nav-menu">
-      <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => activeSubView = 'dashboard'}>
+      <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => navigateTo('dashboard')}>
         <span class="nav-icon"><Icon name="dashboard" size={16} /></span> Dashboard
       </button>
-      <button class="nav-item" class:active={activeSubView === 'leads'} onclick={() => activeSubView = 'leads'}><span class="nav-icon"><Icon name="users" size={16} /></span> Leads</button>
-      <button class="nav-item" class:active={activeSubView === 'trials'} onclick={() => activeSubView = 'trials'}><span class="nav-icon"><Icon name="calendar" size={16} /></span> Trials</button>
-      <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => activeSubView = 'students'}><span class="nav-icon"><Icon name="graduation" size={16} /></span> Students</button>
-      <button class="nav-item" class:active={activeSubView === 'courses'} onclick={() => activeSubView = 'courses'}><span class="nav-icon"><Icon name="book" size={16} /></span> Courses</button>
-      <button class="nav-item" class:active={activeSubView === 'payments'} onclick={() => activeSubView = 'payments'}><span class="nav-icon"><Icon name="credit-card" size={16} /></span> Payments</button>
-      <button class="nav-item" class:active={activeSubView === 'mentors'} onclick={() => activeSubView = 'mentors'}><span class="nav-icon"><Icon name="music" size={16} /></span> Mentors</button>
+      <button class="nav-item" class:active={activeSubView === 'leads'} onclick={() => navigateTo('leads')}><span class="nav-icon"><Icon name="users" size={16} /></span> Leads</button>
+      <button class="nav-item" class:active={activeSubView === 'trials'} onclick={() => navigateTo('trials')}><span class="nav-icon"><Icon name="calendar" size={16} /></span> Trials</button>
+      <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => navigateTo('students')}><span class="nav-icon"><Icon name="graduation" size={16} /></span> Students</button>
+      <button class="nav-item" class:active={activeSubView === 'courses'} onclick={() => navigateTo('courses')}><span class="nav-icon"><Icon name="book" size={16} /></span> Courses</button>
+      <button class="nav-item" class:active={activeSubView === 'payments'} onclick={() => navigateTo('payments')}><span class="nav-icon"><Icon name="credit-card" size={16} /></span> Payments</button>
+      <button class="nav-item" class:active={activeSubView === 'mentors'} onclick={() => navigateTo('mentors')}><span class="nav-icon"><Icon name="music" size={16} /></span> Mentors</button>
+      <button class="nav-item" class:active={activeSubView === 'tickets'} onclick={() => navigateTo('tickets')}><span class="nav-icon"><Icon name="message-square" size={16} /></span> Tickets</button>
 
       <div class="nav-section-title">ADVANCED</div>
       <button class="nav-item"><span class="nav-icon"><Icon name="activity" size={16} /></span> Automation</button>
@@ -159,7 +172,9 @@
 
     <!-- Content Dashboard Scroll -->
     <div class="dashboard-scroll-area">
-      {#if activeSubView === 'dashboard'}
+      {#if isPageTransitioning}
+        <SkeletonLoader type="table" rows={6} cols={5} />
+      {:else if activeSubView === 'dashboard'}
         <!-- Stats Cards -->
         <section class="stats-grid">
           <!-- NOTE: Stats from GET /api/admin/stats — see backend_dev_todo.md #1 -->
@@ -340,7 +355,7 @@
                     </td>
                     <td class="amount-cell">{pay.amount}</td>
                     <td>{pay.date}</td>
-                    <td><span class="status-badge" class:green={pay.status === 'Completed'} class:orange={pay.status === 'Pending'}>{pay.status}</span></td>
+                    <td><span class="status-badge" class:green={pay.status === 'Paid'} class:orange={pay.status === 'Pending'}>{pay.status}</span></td>
                   </tr>
                 {/each}
               </tbody>
@@ -359,6 +374,8 @@
         <PaymentsView />
       {:else if activeSubView === 'mentors'}
         <MentorsView />
+      {:else if activeSubView === 'tickets'}
+        <TicketsView />
       {/if}
     </div>
   </main>

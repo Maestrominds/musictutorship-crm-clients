@@ -2,14 +2,19 @@
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
+  // GET /mentor/classes returns Class model: { id, course_assignment_id, scheduled_at, is_catchup, gmeet_link, created_at }
+  // Note: course_title and student_name are NOT in the raw Class model.
+  // GET /mentor/stats returns: { assigned_students, upcoming_classes, completed_classes }
+  // GET /mentor/students returns GetMentorStudentsListRow: { id, name, email, course_title, progress_percent, next_class_at }
   interface ApiClass {
     id: number;
+    course_assignment_id: number;
     scheduled_at: string;
+    is_catchup: boolean;
     gmeet_link: string | null;
-    course_title?: string;
-    student_name?: string;
-    student_initials?: string;
+    created_at: string;
   }
 
   let upcomingClasses = $state<{ name: string; initials: string; course: string; dateTime: string; isActionable: boolean }[]>([]);
@@ -27,9 +32,9 @@
         .filter(c => new Date(c.scheduled_at) >= now)
         .slice(0, 5)
         .map(c => ({
-          name: c.student_name || 'Student',
-          initials: c.student_name ? c.student_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'ST',
-          course: c.course_title || 'Music Course',
+          name: c.is_catchup ? 'Catch-up Session' : 'Class Session',
+          initials: c.is_catchup ? 'CU' : 'CS',
+          course: `Assignment #${c.course_assignment_id}`,
           dateTime: new Date(c.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
           isActionable: !!c.gmeet_link
         }));
@@ -67,7 +72,9 @@
 </script>
 
 <div class="mentor-dash-view">
-  <!-- Stats Grid -->
+  {#if isLoading}
+    <SkeletonLoader type="dashboard" />
+  {:else}
   <section class="stats-row">
     <div class="stat-card">
       <div class="stat-icon red-bg"><Icon name="graduation" size={20} /></div>
@@ -183,6 +190,7 @@
       <button class="view-all-act-btn">View All Activity</button>
     </div>
   </section>
+  {/if}
 </div>
 
 <style>

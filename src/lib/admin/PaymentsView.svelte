@@ -1,43 +1,45 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet, apiFetch } from '$lib/api';
-  import type { Student } from '../dataStore';
+  import { apiGet } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
-  let students = $state<Student[]>([]);
+  // We define a simple interface for the payment row
+  interface Payment {
+    id: number;
+    name: string;
+    course: string;
+    amount: string;
+    paymentDate: string;
+  }
+
+  let payments = $state<Payment[]>([]);
   let isLoading = $state(true);
 
-  // NOTE: GET /api/admin/payments is not yet implemented. See backend_dev_todo.md #6
+  // Backend: GET /admin/payments returns GetAdminPaymentsRow { id, student_name, course_title, amount, created_at }
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/admin/payments');
-      students = (data || []).map(p => ({
+      payments = (data || []).map(p => ({
         id: p.id,
         name: p.student_name || 'Student',
-        email: '',
         course: p.course_title || 'Course Tuition',
-        mentor: '',
-        enrollmentDate: '',
-        paymentStatus: 'Paid' as const,
         amount: `$${p.amount}`,
-        paymentMethod: 'Online Payment',
         paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
       }));
     } catch {
-      students = []; // Not yet available — show empty state
+      payments = []; // Not yet available — show empty state
     } finally {
       isLoading = false;
     }
   });
 
-  let activeTab = $state<'All' | 'Paid' | 'Pending' | 'Failed'>('All');
   let searchStudentName = $state('');
 
   let filteredPayments = $derived(
-    students.filter(student => {
-      const matchTab = activeTab === 'All' || student.paymentStatus === activeTab;
-      const matchSearch = student.name.toLowerCase().includes(searchStudentName.toLowerCase());
-      return matchTab && matchSearch;
+    payments.filter(payment => {
+      const matchSearch = payment.name.toLowerCase().includes(searchStudentName.toLowerCase());
+      return matchSearch;
     })
   );
 
@@ -47,10 +49,14 @@
 </script>
 
 <div class="payments-view">
+  {#if isLoading}
+    <SkeletonLoader type="table" rows={6} cols={3} />
+  {:else}
+
   <div class="header-row">
     <div class="header-text">
       <h2>Payments Management</h2>
-      <p>Review and manage student tuition and subscription fees.</p>
+      <p>Review student tuition and subscription fees.</p>
     </div>
     <div class="header-actions">
       <button class="export-btn">
@@ -60,13 +66,6 @@
   </div>
 
   <div class="filter-controls-card">
-    <div class="status-tabs">
-      <button class="tab-btn" class:active={activeTab === 'All'} onclick={() => activeTab = 'All'}>All</button>
-      <button class="tab-btn" class:active={activeTab === 'Paid'} onclick={() => activeTab = 'Paid'}>Paid</button>
-      <button class="tab-btn" class:active={activeTab === 'Pending'} onclick={() => activeTab = 'Pending'}>Pending</button>
-      <button class="tab-btn" class:active={activeTab === 'Failed'} onclick={() => activeTab = 'Failed'}>Failed</button>
-    </div>
-
     <div class="filter-inputs">
       <div class="select-wrapper">
         <label for="date-range">DATE RANGE</label>
@@ -94,17 +93,14 @@
       <thead>
         <tr>
           <th>STUDENT NAME</th>
-          <th>AMOUNT</th>
-          <th>METHOD</th>
-          <th>STATUS</th>
+          <th>AMOUNT & COURSE</th>
           <th>DATE</th>
-          <th>ACTIONS</th>
         </tr>
       </thead>
       <tbody>
         {#if filteredPayments.length === 0}
           <tr>
-            <td colspan="6" class="empty-row">No transaction records found.</td>
+            <td colspan="3" class="empty-row">No transaction records found.</td>
           </tr>
         {:else}
           {#each filteredPayments as transaction}
@@ -114,7 +110,6 @@
                   <div class="avatar-circle">{getInitials(transaction.name)}</div>
                   <div class="user-details">
                     <span class="name">{transaction.name}</span>
-                    <span class="email">{transaction.email}</span>
                   </div>
                 </div>
               </td>
@@ -124,37 +119,7 @@
                   <div class="course-sub">{transaction.course}</div>
                 </div>
               </td>
-              <td class="method-text">
-                <span class="card-icon"><Icon name="credit-card" size={14} /></span> {transaction.paymentMethod}
-              </td>
-              <td>
-                <span class="status-badge" class:paid={transaction.paymentStatus === 'Paid'} class:pending={transaction.paymentStatus === 'Pending' || transaction.paymentStatus === 'Overdue'} class:failed={transaction.paymentStatus === 'Failed'}>
-                  {transaction.paymentStatus === 'Overdue' ? 'Pending' : transaction.paymentStatus}
-                </span>
-              </td>
               <td class="date-text">{transaction.paymentDate}</td>
-              <td>
-                <select 
-                  value={transaction.paymentStatus} 
-                  onchange={async (e) => {
-                    const newStatus = (e.target as HTMLSelectElement).value;
-                    try {
-                      await apiFetch(`/admin/payments/${transaction.id}/status`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({ status: newStatus })
-                      });
-                      transaction.paymentStatus = newStatus as any;
-                    } catch (err) {
-                      alert('Failed to update payment status: ' + (err instanceof Error ? err.message : String(err)));
-                    }
-                  }}
-                  style="padding: 4px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem; background: white;"
-                >
-                  <option value="Paid">Paid</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Failed">Failed</option>
-                </select>
-              </td>
             </tr>
           {/each}
         {/if}
@@ -162,18 +127,10 @@
     </table>
 
     <div class="table-footer">
-      <span class="results-count">Showing 1 to {filteredPayments.length} of {students.length} payments</span>
-      <div class="pagination">
-        <button class="pag-btn prev">◀</button>
-        <button class="pag-btn active">1</button>
-        <button class="pag-btn">2</button>
-        <button class="pag-btn">3</button>
-        <span class="pag-dots">...</span>
-        <button class="pag-btn">9</button>
-        <button class="pag-btn next">▶</button>
-      </div>
+      <span class="results-count">Showing {filteredPayments.length} payments</span>
     </div>
   </div>
+  {/if}
 </div>
 
 <style>
@@ -201,12 +158,17 @@
     font-size: 0.95rem;
   }
 
+  .header-actions {
+    display: flex;
+    gap: 12px;
+  }
+
   .export-btn {
-    border: 1.5px solid var(--border-color);
+    border: 1px solid var(--border-color);
     background-color: var(--bg-card);
-    color: var(--primary);
-    font-weight: 700;
-    padding: 10px 20px;
+    color: var(--text-main);
+    font-weight: 600;
+    padding: 8px 16px;
     border-radius: var(--radius-md);
     cursor: pointer;
     display: flex;
@@ -216,98 +178,44 @@
   }
 
   .export-btn:hover {
-    background-color: var(--primary-light);
-    border-color: var(--primary);
+    background-color: #f7fafc;
   }
 
-  /* Filter controls */
   .filter-controls-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 16px;
+    padding: 16px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     box-shadow: var(--shadow-sm);
-    gap: 16px;
-  }
-
-  .status-tabs {
-    display: flex;
-    gap: 8px;
-  }
-
-  .tab-btn {
-    border: none;
-    background: transparent;
-    padding: 8px 16px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.2s;
-  }
-
-  .tab-btn.active {
-    background-color: var(--primary);
-    color: white;
   }
 
   .filter-inputs {
     display: flex;
-    gap: 16px;
-    align-items: center;
-  }
-
-  .select-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    gap: 20px;
   }
 
   .select-wrapper label, .search-input-wrapper label {
-    font-size: 0.65rem;
+    display: block;
+    font-size: 0.7rem;
     font-weight: 700;
     color: var(--text-muted);
-    letter-spacing: 0.5px;
+    margin-bottom: 6px;
   }
 
-  .select-wrapper select {
+  .select-wrapper select, .search-input-wrapper input {
+    padding: 10px 14px;
     border: 1px solid var(--border-color);
-    padding: 8px 12px;
-    border-radius: var(--radius-sm);
-    background-color: var(--bg-card);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
     color: var(--text-main);
-    font-weight: 600;
+    background-color: #f8fafc;
+    min-width: 180px;
     outline: none;
-    cursor: pointer;
-    font-size: 0.85rem;
   }
 
-  .search-input-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .search-input-wrapper input {
-    border: 1px solid var(--border-color);
-    padding: 8px 12px;
-    border-radius: var(--radius-sm);
-    background-color: var(--bg-card);
-    color: var(--text-main);
-    outline: none;
-    font-size: 0.85rem;
-    width: 180px;
-  }
-
-  .search-input-wrapper input:focus {
-    border-color: var(--primary);
-  }
-
-  /* Table Card */
   .table-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -348,8 +256,8 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background-color: #fed7d7;
-    color: #c53030;
+    background-color: #ebf8ff;
+    color: #2b6cb0;
     font-weight: 700;
     font-size: 0.8rem;
     display: flex;
@@ -367,11 +275,6 @@
     color: var(--text-main);
   }
 
-  .user-details .email {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
   .amount-cell-inner {
     display: flex;
     flex-direction: column;
@@ -380,56 +283,18 @@
   .amount-val {
     font-weight: 700;
     color: var(--text-main);
+    font-size: 1rem;
   }
 
   .course-sub {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: var(--text-muted);
-  }
-
-  .method-text {
     font-weight: 500;
-    color: var(--text-main);
-  }
-
-  .card-icon {
-    margin-right: 4px;
-  }
-
-  .status-badge {
-    padding: 4px 10px;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: inline-block;
-  }
-
-  .status-badge.paid {
-    background-color: #c6f6d5;
-    color: #22543d;
-  }
-
-  .status-badge.pending {
-    background-color: #feebc8;
-    color: #c05621;
-  }
-
-  .status-badge.failed {
-    background-color: #fed7d7;
-    color: #9b2c2c;
   }
 
   .date-text {
     font-weight: 500;
     color: var(--text-muted);
-  }
-
-  .action-btn {
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 1.1rem;
-    cursor: pointer;
   }
 
   .empty-row {
@@ -438,7 +303,6 @@
     padding: 32px !important;
   }
 
-  /* Table Footer */
   .table-footer {
     display: flex;
     justify-content: space-between;
@@ -451,50 +315,5 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     font-weight: 500;
-  }
-
-  .pagination {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .pag-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-muted);
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .pag-btn:hover {
-    background-color: #f7fafc;
-    color: var(--text-main);
-  }
-
-  .pag-btn.active {
-    background-color: var(--primary);
-    color: white;
-    border-color: var(--primary);
-  }
-
-  .pag-dots {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    padding: 0 4px;
-  }
-
-  @media (max-width: 1024px) {
-    .filter-controls-card {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .filter-inputs {
-      justify-content: space-between;
-    }
   }
 </style>

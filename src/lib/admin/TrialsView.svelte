@@ -1,7 +1,5 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
-  import { onMount } from 'svelte';
-  import { apiGet } from '$lib/api';
 
   interface Trial {
     id: number;
@@ -12,30 +10,9 @@
     status: 'Scheduled' | 'Completed' | 'Cancelled';
   }
 
+  // Trials endpoint does not exist in the backend — this view shows an empty state.
   let trials = $state<Trial[]>([]);
-  let isLoading = $state(true);
   let activeTab = $state<'Upcoming' | 'Completed' | 'Cancelled'>('Upcoming');
-
-  // NOTE: GET /api/admin/trials is not yet implemented (see backend_dev_todo.md)
-  onMount(async () => {
-    try {
-      const data = await apiGet<any[]>('/admin/trials');
-      trials = (data || []).map(t => ({
-        id: t.id,
-        studentName: t.student_name || 'Student',
-        mentor: t.mentor_name || 'Mentor',
-        dateTime: t.scheduled_at
-          ? new Date(t.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-          : 'N/A',
-        meetingLink: t.gmeet_link || '#',
-        status: t.status === 'scheduled' ? 'Scheduled' : t.status === 'completed' ? 'Completed' : 'Cancelled'
-      }));
-    } catch {
-      trials = []; // Not yet available — show empty state
-    } finally {
-      isLoading = false;
-    }
-  });
 
   // Filtered schedules computation
   let filteredTrials = $derived(
@@ -154,7 +131,7 @@
       <tbody>
         {#if filteredTrials.length === 0}
           <tr>
-            <td colspan="6" class="empty-row">No sessions scheduled for this category.</td>
+            <td colspan="6" class="empty-row">No trial sessions available. This feature is coming soon.</td>
           </tr>
         {:else}
           {#each filteredTrials as trial}

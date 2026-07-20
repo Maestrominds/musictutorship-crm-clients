@@ -2,6 +2,7 @@
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { apiGet, apiPost } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   interface AttendanceRecord {
     id: number;
@@ -11,20 +12,25 @@
     status: 'Present' | 'Absent' | 'Excused';
   }
 
-  let records = $state<AttendanceRecord[]>([]);
-  let isLoading = $state(true);
-  let errorMsg = $state('');
+  interface MentorStudent {
+    id: number;
+    name: string;
+    course_title: string;
+  }
 
+  let records = $state<AttendanceRecord[]>([]);
+  let mentorStudents = $state<MentorStudent[]>([]);
+  let isLoading = $state(true);
   let showMarkModal = $state(false);
-  let newStudent = $state('Benjamin Chen');
-  let newCourse = $state('Classical Piano II');
+  // Selected student ID (bound to dropdown)
+  let newStudentId = $state(0);
   let newClassId = $state(1);
-  let newStudentId = $state(1);
   let newStatus = $state<'Present' | 'Absent' | 'Excused'>('Present');
   let isSubmitting = $state(false);
   let submitError = $state('');
 
-  // NOTE: GET /api/mentor/attendance is not yet implemented. See backend_dev_todo.md #10
+  // GET /api/mentor/attendance returns GetMentorAttendanceListRow { id, student_name, course_title, class_date, status }
+  // GET /api/mentor/students returns GetMentorStudentsListRow { id, name, email, course_title, progress_percent, next_class_at }
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/mentor/attendance');
@@ -35,13 +41,23 @@
         classDate: r.class_date ? new Date(r.class_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
         status: (r.status.charAt(0).toUpperCase() + r.status.slice(1)) as 'Present' | 'Absent' | 'Excused'
       }));
-    } catch (err) {
-      // Endpoint not yet available — show empty list
-      errorMsg = '';
+    } catch {
+      // Endpoint returns empty list if no records yet
+    }
+
+    try {
+      const studs = await apiGet<any[]>('/mentor/students');
+      mentorStudents = (studs || []).map(s => ({ id: s.id, name: s.name, course_title: s.course_title }));
+      if (mentorStudents.length > 0) newStudentId = mentorStudents[0].id;
+    } catch {
+      mentorStudents = [];
     } finally {
       isLoading = false;
     }
   });
+
+  // The selected student object (for display in optimistic update)
+  let selectedStudent = $derived(mentorStudents.find(s => s.id === newStudentId));
 
   function openModal() { showMarkModal = true; }
   function closeModal() { showMarkModal = false; submitError = ''; }
@@ -59,8 +75,8 @@
       // Optimistically add to local list
       records = [{
         id: Date.now(),
-        studentName: newStudent,
-        course: newCourse,
+        studentName: selectedStudent?.name || `Student #${newStudentId}`,
+        course: selectedStudent?.course_title || 'Music Course',
         classDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         status: newStatus
       }, ...records];
@@ -78,6 +94,9 @@
 </script>
 
 <div class="attendance-view">
+  {#if isLoading}
+    <SkeletonLoader type="table" rows={5} cols={4} />
+  {:else}
   <div class="header-row">
     <div class="header-text">
       <h2>Attendance</h2>
@@ -154,13 +173,14 @@
     </table>
 
     <div class="table-footer">
-      <span class="results-count">Showing 1 to {records.length} of 128 results</span>
+      <span class="results-count">Showing 1 to {records.length} of {records.length} records</span>
       <div class="pagination">
         <button class="pag-btn font-weight-bold">Previous</button>
         <button class="pag-btn active">Next</button>
       </div>
     </div>
   </div>
+  {/if}
 
   <!-- Mark Attendance Modal -->
   {#if showMarkModal}
@@ -172,22 +192,20 @@
         </div>
         <form onsubmit={addRecord} class="modal-form">
           <div class="form-group">
-            <label for="student-select">Student Name</label>
-            <select id="student-select" bind:value={newStudent}>
-              <option value="Benjamin Chen">Benjamin Chen</option>
-              <option value="Elena Rodriguez">Elena Rodriguez</option>
-              <option value="Marcus Thompson">Marcus Thompson</option>
-              <option value="Sarah Jenkins">Sarah Jenkins</option>
-              <option value="Leo Vance">Leo Vance</option>
-            </select>
+            <label for="student-select">Student</label>
+            {#if mentorStudents.length > 0}
+              <select id="student-select" bind:value={newStudentId}>
+                {#each mentorStudents as s}
+                  <option value={s.id}>{s.name} — {s.course_title}</option>
+                {/each}
+              </select>
+            {:else}
+              <p style="color: var(--text-muted); font-size: 0.85rem;">No students assigned yet.</p>
+            {/if}
           </div>
           <div class="form-group">
-            <label for="course-select">Course</label>
-            <select id="course-select" bind:value={newCourse}>
-              <option value="Classical Piano II">Classical Piano II</option>
-              <option value="Music Theory Basics">Music Theory Basics</option>
-              <option value="Jazz Improvisation">Jazz Improvisation</option>
-            </select>
+            <label for="class-id-input">Class ID</label>
+            <input id="class-id-input" type="number" min="1" bind:value={newClassId} placeholder="Enter class ID" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: #f8fafc; font-size: 0.9rem; width: 100%;" />
           </div>
           <div class="form-group">
             <label for="status-select">Status</label>
@@ -197,9 +215,14 @@
               <option value="Excused">Excused</option>
             </select>
           </div>
+          {#if submitError}
+            <div class="error-message" style="color: #e53e3e; font-size: 0.9rem; font-weight: 500;">
+              {submitError}
+            </div>
+          {/if}
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
-            <button type="submit" class="submit-btn">Save Record</button>
+            <button type="submit" class="submit-btn" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Record'}</button>
           </div>
         </form>
       </div>

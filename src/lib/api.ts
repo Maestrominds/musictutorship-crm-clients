@@ -40,6 +40,10 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     throw new Error(error?.error || `API error ${res.status}`);
   }
 
+  if (res.status === 204) {
+    return null as any;
+  }
+
   return res.json();
 }
 

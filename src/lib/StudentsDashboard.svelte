@@ -5,12 +5,20 @@
   import StudentCoursesView from './student/StudentCoursesView.svelte';
   import StudentScheduleView from './student/StudentScheduleView.svelte';
   import StudentPaymentsView from './student/StudentPaymentsView.svelte';
+  import SkeletonLoader from './SkeletonLoader.svelte';
 
-  let { data } = $props();
+  let { data } = $props<{ data: any }>();
 
   let activeSubView = $state<'dashboard' | 'courses' | 'schedule' | 'payments'>(
     (typeof window !== 'undefined' ? localStorage.getItem('studentActiveSubView') as any : null) || 'dashboard'
   );
+  let isPageTransitioning = $state(false);
+
+  function navigateTo(view: typeof activeSubView) {
+    if (view === activeSubView) return;
+    isPageTransitioning = true;
+    setTimeout(() => { activeSubView = view; isPageTransitioning = false; }, 180);
+  }
 
   $effect(() => {
     if (typeof window !== 'undefined') {
@@ -49,16 +57,16 @@
     </div>
 
     <nav class="nav-menu">
-      <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => activeSubView = 'dashboard'}>
+      <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => navigateTo('dashboard')}>
         <span class="nav-icon"><Icon name="dashboard" size={16} /></span> My Dashboard
       </button>
-      <button class="nav-item" class:active={activeSubView === 'courses'} onclick={() => activeSubView = 'courses'}>
+      <button class="nav-item" class:active={activeSubView === 'courses'} onclick={() => navigateTo('courses')}>
         <span class="nav-icon"><Icon name="book" size={16} /></span> My Courses
       </button>
-      <button class="nav-item" class:active={activeSubView === 'schedule'} onclick={() => activeSubView = 'schedule'}>
+      <button class="nav-item" class:active={activeSubView === 'schedule'} onclick={() => navigateTo('schedule')}>
         <span class="nav-icon"><Icon name="calendar" size={16} /></span> Class Schedule
       </button>
-      <button class="nav-item" class:active={activeSubView === 'payments'} onclick={() => activeSubView = 'payments'}>
+      <button class="nav-item" class:active={activeSubView === 'payments'} onclick={() => navigateTo('payments')}>
         <span class="nav-icon"><Icon name="dollar" size={16} /></span> Payments
       </button>
       <button class="nav-item"><span class="nav-icon"><Icon name="user" size={16} /></span> Profile</button>
@@ -96,14 +104,16 @@
     
     <!-- Content Switching Area -->
     <div class="dashboard-scroll-area">
-      {#if activeSubView === 'dashboard'}
+      {#if isPageTransitioning}
+        <SkeletonLoader type="table" rows={5} cols={4} />
+      {:else if activeSubView === 'dashboard'}
         <StudentDashboardView dashboardData={data?.dashboardData} />
       {:else if activeSubView === 'courses'}
         <StudentCoursesView />
       {:else if activeSubView === 'schedule'}
         <StudentScheduleView dashboardData={data?.dashboardData} />
       {:else if activeSubView === 'payments'}
-        <StudentPaymentsView dashboardData={data?.dashboardData} />
+        <StudentPaymentsView />
       {/if}
     </div>
   </main>

@@ -6,12 +6,19 @@
   import MentorClassesView from './mentor/MentorClassesView.svelte';
   import MentorAttendanceView from './mentor/MentorAttendanceView.svelte';
   import MentorProfileView from './mentor/MentorProfileView.svelte';
-
-  let { data } = $props();
+  import SkeletonLoader from './SkeletonLoader.svelte';
+  let { data } = $props<{ data: any }>();
 
   let activeSubView = $state<'dashboard' | 'students' | 'classes' | 'attendance' | 'profile'>(
     (typeof window !== 'undefined' ? localStorage.getItem('mentorActiveSubView') as any : null) || 'dashboard'
   );
+  let isPageTransitioning = $state(false);
+
+  function navigateTo(view: typeof activeSubView) {
+    if (view === activeSubView) return;
+    isPageTransitioning = true;
+    setTimeout(() => { activeSubView = view; isPageTransitioning = false; }, 180);
+  }
 
   $effect(() => {
     if (typeof window !== 'undefined') {
@@ -34,6 +41,7 @@
 
 
 <div class="dashboard-layout">
+  {#if data}{/if}
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="brand">
@@ -50,19 +58,19 @@
     </div>
 
     <nav class="nav-menu">
-      <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => activeSubView = 'dashboard'}>
+      <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => navigateTo('dashboard')}>
         <span class="nav-icon"><Icon name="dashboard" size={16} /></span> Mentor Dashboard
       </button>
-      <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => activeSubView = 'students'}>
+      <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => navigateTo('students')}>
         <span class="nav-icon"><Icon name="users" size={16} /></span> My Students
       </button>
-      <button class="nav-item" class:active={activeSubView === 'classes'} onclick={() => activeSubView = 'classes'}>
+      <button class="nav-item" class:active={activeSubView === 'classes'} onclick={() => navigateTo('classes')}>
         <span class="nav-icon"><Icon name="calendar" size={16} /></span> My Classes
       </button>
-      <button class="nav-item" class:active={activeSubView === 'attendance'} onclick={() => activeSubView = 'attendance'}>
+      <button class="nav-item" class:active={activeSubView === 'attendance'} onclick={() => navigateTo('attendance')}>
         <span class="nav-icon"><Icon name="clipboard" size={16} /></span> Attendance
       </button>
-      <button class="nav-item" class:active={activeSubView === 'profile'} onclick={() => activeSubView = 'profile'}>
+      <button class="nav-item" class:active={activeSubView === 'profile'} onclick={() => navigateTo('profile')}>
         <span class="nav-icon"><Icon name="user" size={16} /></span> Profile
       </button>
     </nav>
@@ -99,12 +107,14 @@
     
     <!-- Content Switching Area -->
     <div class="dashboard-scroll-area">
-      {#if activeSubView === 'dashboard'}
-        <MentorDashboardView mentorData={data?.mentorData} />
+      {#if isPageTransitioning}
+        <SkeletonLoader type="table" rows={5} cols={4} />
+      {:else if activeSubView === 'dashboard'}
+        <MentorDashboardView />
       {:else if activeSubView === 'students'}
         <MentorStudentsView />
       {:else if activeSubView === 'classes'}
-        <MentorClassesView mentorData={data?.mentorData} />
+        <MentorClassesView />
       {:else if activeSubView === 'attendance'}
         <MentorAttendanceView />
       {:else if activeSubView === 'profile'}

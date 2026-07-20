@@ -2,6 +2,7 @@
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { apiGet, apiPost, apiFetch } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   interface Lead {
     id: number;
@@ -16,6 +17,12 @@
   let leads = $state<Lead[]>([]);
   let isLoading = $state(true);
   let errorMsg = $state('');
+  let isSubmitting = $state(false);
+  let isActionLoading = $state(false);
+  let actionMessage = $state('');
+  void isLoading;
+  void errorMsg;
+  void isSubmitting;
 
   // Form inputs for adding a lead
   let showAddModal = $state(false);
@@ -23,7 +30,6 @@
   let newLeadEmail = $state('');
   let newLeadPhone = $state('');
   let newLeadCourse = $state('Classical Piano');
-  let isSubmitting = $state(false);
   let submitError = $state('');
 
   // Filter inputs
@@ -84,6 +90,8 @@
     if (!newLeadName || !newLeadEmail) return;
 
     isSubmitting = true;
+    isActionLoading = true;
+    actionMessage = 'Creating lead...';
     submitError = '';
     try {
       await apiPost('/leads', { name: newLeadName, email: newLeadEmail });
@@ -103,6 +111,7 @@
       submitError = err instanceof Error ? err.message : 'Failed to add lead';
     } finally {
       isSubmitting = false;
+      isActionLoading = false;
     }
   }
 
@@ -112,6 +121,12 @@
 </script>
 
 <div class="leads-view">
+  {#if isActionLoading}
+    <div class="action-loading-overlay">
+      <div class="spinner"></div>
+      <div>{actionMessage}</div>
+    </div>
+  {/if}
   <!-- Leads Management Header -->
   <div class="leads-header-row">
     <div class="header-text">
@@ -124,10 +139,7 @@
   </div>
 
   {#if isLoading}
-    <div class="loading-spinner-container">
-      <div class="spinner"></div>
-      <span>Loading leads...</span>
-    </div>
+    <SkeletonLoader type="table" rows={6} cols={5} />
   {:else}
     <!-- Filter and Search Bar -->
     <div class="filter-bar-card">
@@ -146,6 +158,7 @@
           <select id="status-filter" bind:value={filterStatus}>
             <option value="All">All</option>
             <option value="New">New</option>
+            <option value="In Review">In Review</option>
             <option value="Contacted">Contacted</option>
           </select>
         </div>
@@ -217,19 +230,48 @@
                 <td class="date-text">{lead.createdDate}</td>
                 <td>
                   <div style="display: flex; gap: 8px; align-items: center;">
+                    <select 
+                      class="status-select-premium {lead.status.toLowerCase().replace(' ', '-')}"
+                      value={lead.status} 
+                      onchange={async (e) => {
+                        const newStatus = (e.target as HTMLSelectElement).value;
+                        isActionLoading = true;
+                        actionMessage = 'Updating lead status...';
+                        try {
+                          await apiFetch(`/admin/leads/${lead.id}/status`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ status: newStatus })
+                          });
+                          lead.status = newStatus as any;
+                        } catch (err) {
+                          alert('Failed to update lead status: ' + (err instanceof Error ? err.message : String(err)));
+                        } finally {
+                          isActionLoading = false;
+                        }
+                      }}
+                    >
+                      <option value="New">New</option>
+                      <option value="In Review">In Review</option>
+                      <option value="Contacted">Contacted</option>
+                    </select>
+
                     {#if lead.status !== 'Contacted'}
                       <button 
                         onclick={async () => {
+                          isActionLoading = true;
+                          actionMessage = 'Converting lead to student...';
                           try {
                             await apiPost(`/admin/leads/${lead.id}/convert`, {});
                             lead.status = 'Contacted';
                           } catch (err) {
                             alert('Failed to convert lead: ' + (err instanceof Error ? err.message : String(err)));
+                          } finally {
+                            isActionLoading = false;
                           }
                         }}
                         style="padding: 4px 8px; border-radius: 4px; border: none; background: #e53e3e; color: white; font-size: 0.8rem; cursor: pointer;"
                       >
-                        Contact to Student
+                        Convert
                       </button>
                     {:else}
                       <span style="font-size: 0.85rem; color: #38a169; font-weight: 600;">Converted</span>
@@ -261,34 +303,34 @@
     <div class="leads-stats-grid">
       <div class="lead-stat-card">
         <div class="stat-main">
-          <div class="value">1,284</div>
-          <span class="trend positive">↗ +12%</span>
+          <div class="value">{leads.length}</div>
+          <span class="trend positive">↗ All-time</span>
         </div>
         <div class="label">TOTAL LEADS</div>
       </div>
       
       <div class="lead-stat-card">
         <div class="stat-main">
-          <div class="value">42</div>
-          <span class="trend neutral">In review</span>
+          <div class="value">{leads.filter(l => l.status === 'New' || l.status === 'In Review').length}</div>
+          <span class="trend neutral">In review: {leads.filter(l => l.status === 'In Review').length}</span>
         </div>
         <div class="label">ACTIVE PIPELINE</div>
       </div>
 
       <div class="lead-stat-card">
         <div class="stat-main">
-          <div class="value">28.4%</div>
-          <span class="trend positive">↗ Optimized</span>
+          <div class="value">{leads.length ? ((leads.filter(l => l.status === 'Contacted').length / leads.length) * 100).toFixed(1) : 0}%</div>
+          <span class="trend positive">Converted: {leads.filter(l => l.status === 'Contacted').length}</span>
         </div>
         <div class="label">CONV. RATE</div>
       </div>
 
       <div class="lead-stat-card">
         <div class="stat-main">
-          <div class="value">1.2h</div>
-          <span class="trend positive">Top performance</span>
+          <div class="value">{leads.filter(l => l.status === 'New').length}</div>
+          <span class="trend positive">Action needed</span>
         </div>
-        <div class="label">AVG. RESPONSE</div>
+        <div class="label">NEW LEADS</div>
       </div>
     </div>
   {/if}
@@ -322,6 +364,11 @@
               <option value="Guitar Theory">Guitar Theory</option>
             </select>
           </div>
+          {#if submitError}
+            <div class="error-message" style="color: #e53e3e; margin-bottom: 12px; font-size: 0.9rem; font-weight: 500;">
+              {submitError}
+            </div>
+          {/if}
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
             <button type="submit" class="submit-btn">Save Lead</button>
@@ -793,5 +840,45 @@
     .leads-stats-grid {
       grid-template-columns: repeat(2, 1fr);
     }
+  }
+
+  .status-select-premium {
+    padding: 6px 12px;
+    border-radius: var(--radius-md, 6px);
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 1px solid var(--border-color, #e2e8f0);
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234a5568' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px;
+    padding-right: 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-block;
+  }
+  .status-select-premium.new {
+    background-color: #ebf8ff;
+    color: #2b6cb0;
+    border-color: #bee3f8;
+  }
+  .status-select-premium.in-review {
+    background-color: #faf5ff;
+    color: #553c9a;
+    border-color: #e9d8fd;
+  }
+  .status-select-premium.contacted {
+    background-color: #c6f6d5;
+    color: #22543d;
+    border-color: #c6f6d5;
+  }
+  .status-select-premium:hover {
+    filter: brightness(0.95);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   }
 </style>

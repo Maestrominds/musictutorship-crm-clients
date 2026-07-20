@@ -12,12 +12,13 @@
       status: c.gmeet_link ? 'Starts Soon' : 'Scheduled',
       statusClass: c.gmeet_link ? 'starts-soon' : 'scheduled',
       isJoinable: !!c.gmeet_link,
-      gmeet_link: c.gmeet_link
+      gmeet_link: c.gmeet_link,
+      course_assignment_id: c.course_assignment_id
     }))
   );
 
   import { onMount } from 'svelte';
-  import { apiGet } from '$lib/api';
+  import { apiGet, apiPost } from '$lib/api';
 
   let pastClasses = $state<{ title: string; focus: string; mentor: string; date: string }[]>([]);
 
@@ -34,6 +35,60 @@
       console.error('Failed to load past classes:', err);
     }
   });
+
+  // Catchup Booking State
+  let showCatchupModal = $state(false);
+  let isFetchingAvail = $state(false);
+  let mentorAvails = $state<any[]>([]);
+  let selectedAvail = $state('');
+  let catchupCourseId = $state<number | ''>('');
+  let isBooking = $state(false);
+  let catchupStatus = $state('');
+
+  async function openCatchupModal() {
+    showCatchupModal = true;
+    catchupStatus = '';
+    selectedAvail = '';
+    catchupCourseId = upcomingClasses.length > 0 ? upcomingClasses[0].course_assignment_id || '' : '';
+    
+    isFetchingAvail = true;
+    try {
+      const data = await apiGet<any[]>('/student/mentor/availability');
+      mentorAvails = data || [];
+    } catch (err: any) {
+      catchupStatus = err.message || 'Failed to load availability';
+    } finally {
+      isFetchingAvail = false;
+    }
+  }
+
+  function closeCatchupModal() {
+    showCatchupModal = false;
+  }
+
+  async function handleBookCatchup(e: SubmitEvent) {
+    e.preventDefault();
+    if (!catchupCourseId || !selectedAvail) {
+      catchupStatus = 'Please select a course and a time slot.';
+      return;
+    }
+    isBooking = true;
+    catchupStatus = '';
+    try {
+      await apiPost('/student/catchup', {
+        course_assignment_id: Number(catchupCourseId),
+        scheduled_at: selectedAvail
+      });
+      catchupStatus = 'Catch-up session booked successfully!';
+      setTimeout(() => {
+        if (showCatchupModal) closeCatchupModal();
+      }, 1500);
+    } catch (err: any) {
+      catchupStatus = err.message || 'Failed to book catch-up';
+    } finally {
+      isBooking = false;
+    }
+  }
 </script>
 
 
@@ -44,7 +99,7 @@
       <h2>Class Schedule</h2>
       <p>Manage your upcoming music lessons and view past recordings.</p>
     </div>
-    <button class="reschedule-btn">Request Rescheduling</button>
+    <button class="reschedule-btn" onclick={openCatchupModal}>Request Rescheduling</button>
   </div>
 
   <!-- Upcoming Classes -->
@@ -124,6 +179,65 @@
       {/each}
     </div>
   </div>
+
+  <!-- Catchup Modal -->
+  {#if showCatchupModal}
+    <div class="modal-overlay" onclick={closeCatchupModal} aria-hidden="true">
+      <div class="modal-content" onclick={e => e.stopPropagation()} role="dialog">
+        <div class="modal-header">
+          <h3>Request Catch-up Session</h3>
+          <button class="close-btn" onclick={closeCatchupModal}>&times;</button>
+        </div>
+        <form class="modal-form" onsubmit={handleBookCatchup} style="margin-top: 15px;">
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="course-select">Course Assignment</label>
+            <select id="course-select" bind:value={catchupCourseId} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
+              {#if upcomingClasses.length === 0}
+                <option value="" disabled>No upcoming classes found</option>
+              {/if}
+              {#each upcomingClasses as c}
+                {#if c.course_assignment_id}
+                  <option value={c.course_assignment_id}>{c.name}</option>
+                {/if}
+              {/each}
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label for="slot-select">Available Mentor Slots</label>
+            {#if isFetchingAvail}
+              <div style="padding: 10px; color: var(--text-muted); font-size: 0.9rem;">Loading slots...</div>
+            {:else if mentorAvails.length === 0}
+              <div style="padding: 10px; color: #e53e3e; font-size: 0.9rem;">No availability found for your mentor.</div>
+            {:else}
+              <select id="slot-select" bind:value={selectedAvail} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
+                <option value="" disabled>Select a time</option>
+                {#each mentorAvails as avail}
+                  <option value={avail.start_time}>
+                    {new Date(avail.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} - 
+                    {new Date(avail.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  </option>
+                {/each}
+              </select>
+            {/if}
+          </div>
+
+          {#if catchupStatus}
+            <div style="margin-bottom: 15px; font-size: 0.9rem; color: {catchupStatus.includes('success') ? 'green' : '#e53e3e'}">
+              {catchupStatus}
+            </div>
+          {/if}
+
+          <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px;">
+            <button type="button" class="cancel-btn" onclick={closeCatchupModal} style="padding: 10px 16px; border: 1px solid var(--border-color); background: white; border-radius: var(--radius-md); cursor: pointer;">Cancel</button>
+            <button type="submit" class="save-btn" disabled={isBooking || isFetchingAvail || mentorAvails.length === 0} style="padding: 10px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-weight: 600; cursor: pointer;">
+              {isBooking ? 'Booking...' : 'Book Catch-up'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>

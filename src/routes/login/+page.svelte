@@ -3,12 +3,6 @@
   import { goto } from '$app/navigation';
   import Icon from '$lib/Icon.svelte';
 
-  // Hardcoded credentials for each role
-  const credentials = {
-    admin: { email: 'admin@melodyflow.com', password: 'admin123' },
-    mentors: { email: 'mentor@melodyflow.com', password: 'mentor123' },
-    student: { email: 'student@melodyflow.com', password: 'student123' }
-  };
 
   let email = $state('');
   let password = $state('');
@@ -16,13 +10,6 @@
   let errorMsg = $state('');
   let showPassword = $state(false);
 
-  // Determine role from credentials at login time
-  function getRoleFromCredentials(e: string, p: string): 'admin' | 'mentors' | 'student' | null {
-    if (e === credentials.admin.email && p === credentials.admin.password) return 'admin';
-    if (e === credentials.mentors.email && p === credentials.mentors.password) return 'mentors';
-    if (e === credentials.student.email && p === credentials.student.password) return 'student';
-    return null;
-  }
 
   async function handleLogin(e: SubmitEvent) {
     e.preventDefault();

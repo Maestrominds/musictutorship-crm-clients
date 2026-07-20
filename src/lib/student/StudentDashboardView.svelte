@@ -47,7 +47,7 @@
   const mentorName = $derived(activeMentorName);
 
   // NOTE: activities require GET /api/student/activity — not yet implemented (see backend_dev_todo.md)
-  const activities: { type: string; detail: string; time: string; color: string }[] = [];
+  const activities: { type: string; detail: string; time: string; color: string; icon?: string }[] = [];
 </script>
 
 <div class="student-dash-view">

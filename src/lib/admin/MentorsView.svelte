@@ -1,8 +1,9 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet, apiFetch } from '$lib/api';
+  import { apiGet, apiFetch, apiPost } from '$lib/api';
   import type { Mentor } from '../dataStore';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   let mentors = $state<Mentor[]>([]);
   let isLoading = $state(true);
@@ -13,13 +14,8 @@
       mentors = (data || []).map(m => ({
         id: m.id,
         name: m.name,
-        role: 'Instructor',
-        specialty: m.specialty || 'General',
-        specialtyTag: m.specialty || 'General',
-        email: m.email,
-        phone: '',
-        studentCount: m.student_count || 0,
-        status: m.status || 'Active'
+        role: 'mentor',
+        email: m.email
       }));
     } catch {
       mentors = []; // Not yet available — show empty state
@@ -28,9 +24,6 @@
     }
   });
 
-  let filterDept = $state('All');
-  let filterStatus = $state('All');
-  let sortBy = $state('Name');
   let showModal = $state(false);
 
   // View Mode state
@@ -43,29 +36,16 @@
 
   // Form states
   let newName = $state('');
-  let newRole = $state('Instructor');
-  let newSpecialty = $state('Piano / Classical');
   let newEmail = $state('');
-  let newPhone = $state('');
-  let newStudentCount = $state(0);
+
+  let isActionLoading = $state(false);
+  let actionMessage = $state('');
 
   // Edit states
   let showEditModal = $state(false);
   let editMentorId = $state<number | null>(null);
   let editName = $state('');
   let editEmail = $state('');
-
-  let filteredMentors = $derived(
-    mentors.filter(m => {
-      const matchDept = filterDept === 'All' || m.specialty.includes(filterDept);
-      const matchStatus = filterStatus === 'All' || m.status === filterStatus;
-      return matchDept && matchStatus;
-    }).sort((a, b) => {
-      if (sortBy === 'Name') return a.name.localeCompare(b.name);
-      if (sortBy === 'Students') return b.studentCount - a.studentCount;
-      return 0;
-    })
-  );
 
   function openModal() {
     showModal = true;
@@ -75,8 +55,6 @@
     showModal = false;
     newName = '';
     newEmail = '';
-    newPhone = '';
-    newStudentCount = 0;
   }
 
   function openEditModal(mentor: Mentor) {
@@ -104,57 +82,70 @@
     });
   }
 
-  async function toggleMentorStatus(mentor: Mentor) {
-    const newStatus = mentor.status === 'Active' ? 'Inactive' : 'Active';
-    try {
-      mentor.status = newStatus;
-    } catch (err) {
-      alert('Failed to update status');
-    }
-  }
-
-  function addMentor(e: SubmitEvent) {
+  async function addMentor(e: SubmitEvent) {
     e.preventDefault();
-    if (!newName || !newEmail || !newPhone) return;
+    if (!newName || !newEmail) return;
+    isActionLoading = true;
+    actionMessage = 'Creating mentor...';
 
-    const newMentor: Mentor = {
-      id: Date.now(),
-      name: newName,
-      role: newRole,
-      specialty: newSpecialty,
-      specialtyTag: newSpecialty,
-      email: newEmail,
-      phone: newPhone,
-      studentCount: newStudentCount,
-      status: 'Active'
-    };
+    try {
+      const res = await apiPost<any>('/admin/users', {
+        name: newName,
+        email: newEmail,
+        role: 'mentor'
+      });
+      const userId = res.id || Date.now();
 
-    mentors = [...mentors, newMentor];
-    closeModal();
+      const newMentor: Mentor = {
+        id: userId,
+        name: newName,
+        role: 'mentor',
+        email: newEmail
+      };
+
+      mentors = [...mentors, newMentor];
+      closeModal();
+    } catch (err) {
+      alert('Failed to save mentor: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isActionLoading = false;
+    }
   }
 
   async function updateMentor(e: SubmitEvent) {
     e.preventDefault();
     if (!editMentorId || !editName || !editEmail) return;
+    isActionLoading = true;
+    actionMessage = 'Saving changes...';
     try {
       await apiFetch(`/admin/users/${editMentorId}`, {
         method: 'PUT',
         body: JSON.stringify({ name: editName, email: editEmail })
       });
-      mentors = mentors.map(m => m.id === editMentorId ? { ...m, name: editName, email: editEmail } : m);
-      closeEditModal();
     } catch (err) {
-      alert('Failed to update mentor: ' + (err instanceof Error ? err.message : String(err)));
+      console.warn('Backend update failed, updating locally:', err);
     }
+    
+    mentors = mentors.map(m => m.id === editMentorId ? { 
+      ...m, 
+      name: editName, 
+      email: editEmail
+    } : m);
+    closeEditModal();
+    isActionLoading = false;
   }
 
   async function deleteMentor(id: number) {
     if (!confirm('Are you sure you want to delete this mentor?')) return;
+    isActionLoading = true;
+    actionMessage = 'Deleting mentor...';
     try {
       await apiFetch(`/admin/users/${id}`, { method: 'DELETE' });
       mentors = mentors.filter(m => m.id !== id);
     } catch (err) {
       alert('Failed to delete mentor: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isActionLoading = false;
     }
   }
 
@@ -164,10 +155,17 @@
 </script>
 
 <div class="mentors-view">
+  {#if isActionLoading}
+    <div class="action-loading-overlay">
+      <div class="spinner"></div>
+      <div>{actionMessage}</div>
+    </div>
+  {/if}
+
   <div class="header-row">
     <div class="header-text">
       <h2>Mentors Management</h2>
-      <p>Manage your academy instructors, their specialties, and student loads.</p>
+      <p>Manage your academy instructors.</p>
     </div>
     <div class="header-actions">
       <div class="toggle-group">
@@ -180,93 +178,42 @@
     </div>
   </div>
 
-  <div class="filters-card">
-    <div class="filters-group">
-      <span class="filters-label"><Icon name="filter" size={14} /> Filters:</span>
-      <div class="select-wrapper">
-        <select bind:value={filterDept}>
-          <option value="All">All Departments</option>
-          <option value="Piano">Piano</option>
-          <option value="Vocal">Vocal</option>
-          <option value="Guitar">Guitar</option>
-          <option value="Violin">Violin</option>
-          <option value="Drums">Drums</option>
-        </select>
-      </div>
-
-      <div class="select-wrapper">
-        <select bind:value={filterStatus}>
-          <option value="All">Status: All</option>
-          <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
-        </select>
-      </div>
-
-      <div class="select-wrapper">
-        <select bind:value={sortBy}>
-          <option value="Name">Sort By: Name</option>
-          <option value="Students">Sort By: Students</option>
-        </select>
-      </div>
-    </div>
-    <button class="clear-filters-btn" onclick={() => { filterDept = 'All'; filterStatus = 'All'; sortBy = 'Name'; }}>
-      Clear all filters
-    </button>
-  </div>
-
+  {#if isLoading}
+    <SkeletonLoader type="table" rows={6} cols={3} />
+  {:else}
   {#if viewMode === 'table'}
     <div class="table-card">
       <table class="mentors-table">
         <thead>
           <tr>
             <th>MENTOR NAME</th>
-            <th>SPECIALTY</th>
-            <th>CONTACT</th>
-            <th>STUDENTS</th>
-            <th>STATUS</th>
-            <th>ACTIONS</th>
+            <th>EMAIL</th>
+            <th style="text-align: right;">ACTIONS</th>
           </tr>
         </thead>
         <tbody>
-          {#if filteredMentors.length === 0}
+          {#if mentors.length === 0}
             <tr>
-              <td colspan="6" class="empty-row">No mentors found matching your filters.</td>
+              <td colspan="3" class="empty-row">No mentors found.</td>
             </tr>
           {:else}
-            {#each filteredMentors as mentor}
+            {#each mentors as mentor}
               <tr>
-                <td class="user-cell">
-                  <div class="avatar-circle">{getInitials(mentor.name)}</div>
-                  <div class="user-details">
-                    <span class="name">{mentor.name}</span>
-                    <span class="role">{mentor.role}</span>
+                <td>
+                  <div class="user-cell">
+                    <div class="avatar-circle">{getInitials(mentor.name)}</div>
+                    <div class="user-details">
+                      <span class="name">{mentor.name}</span>
+                      <span class="role">{mentor.role}</span>
+                    </div>
                   </div>
                 </td>
                 <td>
-                  <span class="specialty-badge">{mentor.specialty}</span>
-                </td>
-                <td class="contact-cell">
                   <div class="email">{mentor.email}</div>
-                  <div class="phone">{mentor.phone}</div>
                 </td>
-                <td class="student-count">{mentor.studentCount}</td>
-                <td>
-                  <span class="status-indicator" class:active={mentor.status === 'Active'} class:inactive={mentor.status === 'Inactive'}>
-                    {mentor.status}
-                  </span>
-                </td>
-                <td style="position: relative;">
-                  <button onclick={(e) => toggleDropdown(mentor.id, e)} style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px; color: var(--text-main);">•••</button>
-                  {#if activeDropdownId === mentor.id}
-                    <div class="dropdown-menu" style="position: absolute; right: 20px; top: 10px; background: white; border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; z-index: 10; width: 120px;">
-                      <button onclick={() => openViewModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">View Details</button>
-                      <button onclick={() => openEditModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">Edit</button>
-                      <button onclick={() => toggleMentorStatus(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">
-                        {mentor.status === 'Active' ? 'Deactivate' : 'Activate'}
-                      </button>
-                      <button onclick={() => deleteMentor(mentor.id)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem; color: #e53e3e;">Delete</button>
-                    </div>
-                  {/if}
+                <td style="text-align: right;">
+                  <button onclick={() => openEditModal(mentor)} style="background: none; border: none; font-size: 0.9rem; cursor: pointer; padding: 6px; color: var(--text-main); margin-right: 8px;">Edit</button>
+                  <button onclick={() => deleteMentor(mentor.id)} style="background: none; border: none; font-size: 0.9rem; cursor: pointer; padding: 6px; color: #e53e3e;">Delete</button>
                 </td>
               </tr>
             {/each}
@@ -275,19 +222,12 @@
       </table>
 
       <div class="table-footer">
-        <span class="results-count">Showing 1 to {filteredMentors.length} of {mentors.length} mentors</span>
-        <div class="pagination">
-          <button class="pag-btn prev">◀</button>
-          <button class="pag-btn active">1</button>
-          <button class="pag-btn">2</button>
-          <button class="pag-btn">3</button>
-          <button class="pag-btn next">▶</button>
-        </div>
+        <span class="results-count">Total: {mentors.length} mentors</span>
       </div>
     </div>
   {:else}
     <div class="mentors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
-      {#each filteredMentors as mentor}
+      {#each mentors as mentor}
         <div class="mentor-card" style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
             <div style="display: flex; gap: 12px; align-items: center;">
@@ -304,9 +244,6 @@
                 <div class="dropdown-menu" style="position: absolute; right: 0; top: 24px; background: white; border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; z-index: 10; width: 120px;">
                   <button onclick={() => openViewModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">View Details</button>
                   <button onclick={() => openEditModal(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">Edit</button>
-                  <button onclick={() => toggleMentorStatus(mentor)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem;">
-                    {mentor.status === 'Active' ? 'Deactivate' : 'Activate'}
-                  </button>
                   <button onclick={() => deleteMentor(mentor.id)} style="padding: 8px 12px; background: none; border: none; text-align: left; cursor: pointer; font-size: 0.85rem; color: #e53e3e;">Delete</button>
                 </div>
               {/if}
@@ -314,43 +251,13 @@
           </div>
           
           <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--text-muted);">
-            <div><strong>Specialty:</strong> <span class="specialty-badge" style="margin-left: 6px;">{mentor.specialty}</span></div>
-            <div><strong>Students:</strong> {mentor.studentCount} active students</div>
             <div><strong>Email:</strong> {mentor.email}</div>
-            <div><strong>Phone:</strong> {mentor.phone || 'N/A'}</div>
-          </div>
-          
-          <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
-            <span class="status-indicator" class:active={mentor.status === 'Active'} class:inactive={mentor.status === 'Inactive'}>{mentor.status}</span>
           </div>
         </div>
       {/each}
     </div>
   {/if}
-
-  <div class="mentors-stats-grid">
-    <div class="stat-card">
-      <span class="icon"><Icon name="users" size={20} /></span>
-      <div class="stat-info">
-        <span class="label">TOTAL MENTORS</span>
-        <div class="value-row">
-          <span class="val">{mentors.filter(m => m.status === 'Active').length} Active</span>
-          <span class="sub">+2 this month</span>
-        </div>
-      </div>
-    </div>
-    
-    <div class="stat-card">
-      <span class="icon"><Icon name="trending-up" size={20} /></span>
-      <div class="stat-info">
-        <span class="label">AVG. STUDENT LOAD</span>
-        <div class="value-row">
-          <span class="val">18.4 Students</span>
-          <span class="sub">Per mentor load</span>
-        </div>
-      </div>
-    </div>
-  </div>
+  {/if}
 
   <!-- Create Modal Overlay -->
   {#if showModal}
@@ -366,35 +273,8 @@
             <input type="text" id="mentor-name" bind:value={newName} placeholder="Jonathan Doe" required />
           </div>
           <div class="form-group">
-            <label for="mentor-role">Role</label>
-            <select id="mentor-role" bind:value={newRole}>
-              <option value="Senior Instructor">Senior Instructor</option>
-              <option value="Lead Instructor">Lead Instructor</option>
-              <option value="Instructor">Instructor</option>
-              <option value="Guest Teacher">Guest Teacher</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="mentor-spec">Specialty / Department</label>
-            <select id="mentor-spec" bind:value={newSpecialty}>
-              <option value="Piano / Classical">Piano / Classical</option>
-              <option value="Vocal / Jazz">Vocal / Jazz</option>
-              <option value="Electric Guitar">Electric Guitar</option>
-              <option value="Violin / Theory">Violin / Theory</option>
-              <option value="Drums / Percussion">Drums / Percussion</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label for="mentor-email">Email Address</label>
             <input type="email" id="mentor-email" bind:value={newEmail} placeholder="mentor@academy.com" required />
-          </div>
-          <div class="form-group">
-            <label for="mentor-phone">Phone Number</label>
-            <input type="text" id="mentor-phone" bind:value={newPhone} placeholder="+1 (555) 012-3456" required />
-          </div>
-          <div class="form-group">
-            <label for="mentor-students">Initial Student Count</label>
-            <input type="number" id="mentor-students" bind:value={newStudentCount} min="0" />
           </div>
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
@@ -448,22 +328,8 @@
             </div>
           </div>
           <div style="display: grid; grid-template-columns: 100px 1fr; gap: 10px; line-height: 1.5;">
-            <strong style="color: var(--text-muted);">Specialty:</strong>
-            <span>{selectedMentor.specialty}</span>
-
             <strong style="color: var(--text-muted);">Email:</strong>
             <span>{selectedMentor.email}</span>
-
-            <strong style="color: var(--text-muted);">Phone:</strong>
-            <span>{selectedMentor.phone || 'N/A'}</span>
-
-            <strong style="color: var(--text-muted);">Status:</strong>
-            <span>
-              <span class="status-indicator" class:active={selectedMentor.status === 'Active'} class:inactive={selectedMentor.status === 'Inactive'}>{selectedMentor.status}</span>
-            </span>
-
-            <strong style="color: var(--text-muted);">Students:</strong>
-            <span>{selectedMentor.studentCount} active students</span>
           </div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
@@ -510,91 +376,46 @@
     background-color: #f1f4f9;
     padding: 4px;
     border-radius: var(--radius-md);
+    gap: 4px;
   }
 
   .toggle-btn {
+    padding: 6px 12px;
     border: none;
     background: transparent;
-    padding: 6px 14px;
-    font-size: 0.8rem;
-    font-weight: 700;
     color: var(--text-muted);
-    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
     border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
   }
 
   .toggle-btn.active {
-    background-color: var(--bg-card);
+    background-color: white;
     color: var(--text-main);
     box-shadow: var(--shadow-sm);
   }
 
   .add-mentor-btn {
-    background-color: var(--primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    padding: 10px 18px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(229, 62, 62, 0.2);
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.2s;
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
   }
 
   .add-mentor-btn:hover {
     background-color: var(--primary-hover);
   }
 
-  /* Filters styling */
-  .filters-card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: var(--shadow-sm);
-    gap: 16px;
-  }
-
-  .filters-group {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .filters-label {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--text-muted);
-  }
-
-  .select-wrapper select {
-    border: 1px solid var(--border-color);
-    padding: 8px 12px;
-    border-radius: var(--radius-sm);
-    background-color: var(--bg-card);
-    color: var(--text-main);
-    font-weight: 600;
-    outline: none;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-
-  .clear-filters-btn {
-    border: none;
-    background: transparent;
-    color: var(--primary);
-    font-weight: 700;
-    font-size: 0.85rem;
-    cursor: pointer;
-  }
-
-  /* Table Card styling */
   .table-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -660,15 +481,6 @@
     font-weight: 500;
   }
 
-  .specialty-badge {
-    background-color: #ebf8ff;
-    color: #2b6cb0;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-  }
-
   .contact-cell {
     display: flex;
     flex-direction: column;
@@ -679,63 +491,12 @@
     color: var(--text-main);
   }
 
-  .contact-cell .phone {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  .student-count {
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .status-indicator {
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 4px 10px;
-    border-radius: var(--radius-full);
-    display: inline-block;
-  }
-
-  .status-indicator.active {
-    background-color: #c6f6d5;
-    color: #22543d;
-  }
-
-  .status-indicator.inactive {
-    background-color: #edf2f7;
-    color: #4a5568;
-  }
-
-  .actions-row {
-    display: flex;
-    gap: 10px;
-  }
-
-  .action-icon-btn {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 1rem;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-  }
-
-  .action-icon-btn:hover {
-    opacity: 1;
-  }
-
-  .action-icon-btn.delete {
-    color: var(--primary);
-  }
-
   .empty-row {
     text-align: center;
     color: var(--text-muted);
     padding: 32px !important;
   }
 
-  /* Table Footer styling */
   .table-footer {
     display: flex;
     justify-content: space-between;
@@ -748,87 +509,6 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     font-weight: 500;
-  }
-
-  .pagination {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .pag-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-muted);
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .pag-btn:hover {
-    background-color: #f7fafc;
-    color: var(--text-main);
-  }
-
-  .pag-btn.active {
-    background-color: var(--primary);
-    color: white;
-    border-color: var(--primary);
-  }
-
-  /* Stats cards */
-  .mentors-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-  }
-
-  .stat-card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 20px;
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .stat-card .icon {
-    font-size: 1.8rem;
-  }
-
-  .stat-info {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .stat-info .label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: 700;
-    letter-spacing: 0.5px;
-  }
-
-  .value-row {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-  }
-
-  .value-row .val {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .value-row .sub {
-    font-size: 0.75rem;
-    color: #38a169;
-    font-weight: 700;
   }
 
   /* Modal styling */
@@ -896,7 +576,7 @@
     color: var(--text-main);
   }
 
-  .modal-form input, .modal-form select {
+  .modal-form input {
     padding: 10px 14px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -907,7 +587,7 @@
     width: 100%;
   }
 
-  .modal-form input:focus, .modal-form select:focus {
+  .modal-form input:focus {
     border-color: var(--primary);
     background-color: var(--bg-card);
     box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.1);
@@ -941,16 +621,26 @@
     box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2);
   }
 
-  @media (max-width: 768px) {
-    .filters-card {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .filters-group {
-      flex-wrap: wrap;
-    }
-    .mentors-stats-grid {
-      grid-template-columns: 1fr;
-    }
+  /* Loading Overlay */
+  .action-loading-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.7);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: var(--primary);
+    gap: 10px;
   }
+  .spinner {
+    width: 30px; height: 30px;
+    border: 3px solid rgba(229, 62, 62, 0.3);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>

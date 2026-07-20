@@ -2,6 +2,7 @@
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   interface MentorStudent {
     id: number;
@@ -15,7 +16,7 @@
   let students = $state<MentorStudent[]>([]);
   let isLoading = $state(true);
 
-  // NOTE: GET /api/mentor/students is not yet implemented. See backend_dev_todo.md #9
+  // GET /api/mentor/students returns GetMentorStudentsListRow { id, name, email, course_title, progress_percent, next_class_at }
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/mentor/students');
@@ -50,6 +51,9 @@
 </script>
 
 <div class="mentor-students-view">
+  {#if isLoading}
+    <SkeletonLoader type="table" rows={5} cols={4} />
+  {:else}
   <div class="header-row">
     <div class="header-text">
       <h2>My Students</h2>
@@ -85,7 +89,7 @@
           <tr><td colspan="6" style="text-align:center;padding:24px;color:#999;">Loading students...</td></tr>
         {:else if filteredStudents.length === 0}
           <tr>
-            <td colspan="6" class="empty-row">No students assigned yet. The backend endpoint is pending — see backend_dev_todo.md #9.</td>
+            <td colspan="6" class="empty-row">No students assigned to you yet.</td>
           </tr>
         {:else}
           {#each filteredStudents as student}
@@ -100,7 +104,7 @@
               <td>
                 <span class="course-badge">{student.course}</span>
               </td>
-              <td class="date-text">{student.email || '—'}</td>
+              <td class="date-text">{student.nextClass}</td>
               <td>
                 <div class="progress-container">
                   <div class="progress-bar-bg">
@@ -132,6 +136,7 @@
       </div>
     </div>
   </div>
+  {/if}
 </div>
 
 <style>

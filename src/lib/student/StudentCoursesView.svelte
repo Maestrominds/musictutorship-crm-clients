@@ -2,6 +2,7 @@
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { apiGet } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   let activeTab = $state<'In Progress' | 'Completed' | 'Saved'>('In Progress');
 
@@ -18,7 +19,7 @@
   let upcomingSessions = $state<{ id: number; title: string; instructor: string; date: string; time: string; isActionable: boolean }[]>([]);
   let isLoading = $state(true);
 
-  // NOTE: GET /api/student/courses is not yet implemented. See backend_dev_todo.md #12
+  // GET /api/student/courses returns GetStudentCoursesListRow { id, course_title, mentor_name, progress_percent, total_lessons, completed_lessons }
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/student/courses');
@@ -39,6 +40,9 @@
 </script>
 
 <div class="student-courses-view">
+  {#if isLoading}
+    <SkeletonLoader type="cards" rows={4} />
+  {:else}
   <div class="header-row">
     <div class="header-text">
       <h2>My Courses</h2>
@@ -62,7 +66,7 @@
     {#if isLoading}
       <div style="text-align:center;padding:40px;color:#999;">Loading your courses...</div>
     {:else if inProgressCourses.length === 0}
-      <div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">No courses enrolled yet. The backend endpoint is pending — see backend_dev_todo.md #12.</div>
+      <div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">No courses enrolled yet. Please contact your admin to get enrolled in a course.</div>
     {:else}
     <div class="courses-grid">
       {#each inProgressCourses as course}
@@ -134,6 +138,7 @@
       <p class="goal-message">"Practice makes progress. You're almost at your goal for today!"</p>
     </div>
   </div>
+  {/if}
 </div>
 
 <style>

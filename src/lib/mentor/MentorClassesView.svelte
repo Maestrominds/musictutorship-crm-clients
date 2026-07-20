@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet } from '$lib/api';
+  import { apiGet, apiPost } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   interface ApiClass {
     id: number;
@@ -31,6 +32,13 @@
   let classes = $state<TeachingClass[]>([]);
   let isLoading = $state(true);
   let errorMsg = $state('');
+
+  // Scheduling State
+  let showScheduleModal = $state(false);
+  let scheduleClassId = $state(0);
+  let scheduleStudentEmail = $state('');
+  let isScheduling = $state(false);
+  let scheduleError = $state('');
 
   function mapApiClass(c: ApiClass): TeachingClass {
     const scheduledDate = new Date(c.scheduled_at);
@@ -63,6 +71,42 @@
     }
   });
 
+  function openScheduleModal(classId: number) {
+    scheduleClassId = classId;
+    scheduleStudentEmail = '';
+    scheduleError = '';
+    showScheduleModal = true;
+  }
+
+  function closeScheduleModal() {
+    showScheduleModal = false;
+  }
+
+  async function handleSchedule(e: SubmitEvent) {
+    e.preventDefault();
+    isScheduling = true;
+    scheduleError = '';
+    try {
+      const res = await apiPost<any>('/mentor/classes/schedule', {
+        class_id: scheduleClassId,
+        student_email: scheduleStudentEmail
+      });
+      // Update local state
+      classes = classes.map(c => {
+        if (c.id === scheduleClassId) {
+          c.meetingLink = res.gmeet_link;
+          c.meetingType = 'JoinActive';
+        }
+        return c;
+      });
+      closeScheduleModal();
+    } catch (err: any) {
+      scheduleError = err.message || 'Failed to schedule class';
+    } finally {
+      isScheduling = false;
+    }
+  }
+
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   }
@@ -85,7 +129,7 @@
 
   <div class="table-card">
     {#if isLoading}
-      <div class="empty-state"><p>Loading classes...</p></div>
+      <SkeletonLoader type="table" rows={5} cols={6} />
     {:else if errorMsg}
       <div class="empty-state error"><p>⚠️ {errorMsg}</p></div>
     {:else}
@@ -120,12 +164,12 @@
             <td class="date-text">{item.dateTime}</td>
             <td>
               {#if item.meetingType === 'Join'}
-                <a href={item.meetingLink} class="zoom-link red" target="_blank" rel="noreferrer">
+                <button class="zoom-link red" style="background:none;border:1px solid #e53e3e;cursor:pointer;" onclick={() => openScheduleModal(item.id)}>
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                   </svg>
-                  Join Meeting
-                </a>
+                  Generate Link
+                </button>
               {:else if item.meetingType === 'JoinActive'}
                 <a href={item.meetingLink} class="zoom-link green" target="_blank" rel="noreferrer">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -192,6 +236,33 @@
       </div>
     </div>
   </div>
+  <!-- Schedule Modal -->
+  {#if showScheduleModal}
+    <div class="modal-overlay" onclick={closeScheduleModal} aria-hidden="true">
+      <div class="modal-content" onclick={e => e.stopPropagation()} role="dialog">
+        <div class="modal-header">
+          <h3>Generate Meeting Link</h3>
+          <button class="close-btn" onclick={closeScheduleModal}>&times;</button>
+        </div>
+        <form class="modal-form" onsubmit={handleSchedule}>
+          <div class="form-group">
+            <label for="studentEmail">Student Email</label>
+            <input type="email" id="studentEmail" bind:value={scheduleStudentEmail} placeholder="student@example.com" required style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: #f8fafc; font-size: 0.9rem; width: 100%;" />
+            <span style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Needed for Google Calendar invite</span>
+          </div>
+          {#if scheduleError}
+            <div style="color: #e53e3e; font-size: 0.9rem; margin-top: 10px;">{scheduleError}</div>
+          {/if}
+          <div class="modal-actions" style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+            <button type="button" class="cancel-btn" onclick={closeScheduleModal} style="padding: 10px 16px; border: 1px solid var(--border-color); background: white; border-radius: var(--radius-md); cursor: pointer;">Cancel</button>
+            <button type="submit" class="save-btn" disabled={isScheduling} style="padding: 10px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-weight: 600; cursor: pointer;">
+              {isScheduling ? 'Generating...' : 'Generate Link'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
+  import { apiPost } from '$lib/api';
 
   // Profile settings state
   let fullName = $state('');
@@ -9,14 +9,21 @@
   let specialty = $state('');
 
   // Availability Settings
-  let isMonEnabled = $state(true);
-  let isTueEnabled = $state(true);
-  let isWedEnabled = $state(false);
+  let startTime = $state('');
+  let endTime = $state('');
+  let availStatus = $state('');
+  let isSavingAvail = $state(false);
 
   // Notification Preferences
   let reminderEmail = $state(true);
   let reminderPush = $state(true);
   let messageAlerts = $state(true);
+
+  // Password Reset
+  let oldPassword = $state('');
+  let newPassword = $state('');
+  let pwdStatus = $state('');
+  let isChangingPwd = $state(false);
 
   onMount(() => {
     const userJson = localStorage.getItem('user');
@@ -35,6 +42,53 @@
 
   function saveChanges() {
     alert('Changes saved successfully!');
+  }
+
+  async function handleAddAvailability(e: SubmitEvent) {
+    e.preventDefault();
+    if (!startTime || !endTime) {
+      availStatus = 'Please select both times.';
+      return;
+    }
+    isSavingAvail = true;
+    availStatus = '';
+    try {
+      // POST /mentor/availability expects start_time and end_time (RFC3339 formatted strings are usually fine, or JS ISO strings)
+      await apiPost('/mentor/availability', {
+        start_time: new Date(startTime).toISOString(),
+        end_time: new Date(endTime).toISOString()
+      });
+      availStatus = 'Availability added successfully!';
+      startTime = '';
+      endTime = '';
+    } catch (err: any) {
+      availStatus = err.message || 'Failed to add availability.';
+    } finally {
+      isSavingAvail = false;
+    }
+  }
+
+  async function handleChangePassword(e: SubmitEvent) {
+    e.preventDefault();
+    if (!oldPassword || !newPassword) {
+      pwdStatus = 'Please enter both passwords.';
+      return;
+    }
+    isChangingPwd = true;
+    pwdStatus = '';
+    try {
+      await apiPost('/auth/reset-password', {
+        old_password: oldPassword,
+        new_password: newPassword
+      });
+      pwdStatus = 'Password changed successfully!';
+      oldPassword = '';
+      newPassword = '';
+    } catch (err: any) {
+      pwdStatus = err.message || 'Failed to change password.';
+    } finally {
+      isChangingPwd = false;
+    }
   }
 </script>
 
@@ -100,74 +154,31 @@
         <h3>Availability Settings</h3>
         <span class="active-badge">ACTIVE SCHEDULE</span>
       </div>
-      <button class="reset-link" onclick={() => { isMonEnabled = true; isTueEnabled = true; isWedEnabled = false; }}>Reset to Default</button>
     </div>
 
-    <div class="availability-roster">
-      <div class="day-header-row">
-        <span>MON</span>
-        <span>TUE</span>
-        <span>WED</span>
-        <span>THU</span>
-        <span>FRI</span>
-        <span>SAT</span>
-        <span>SUN</span>
+    <form class="availability-form" onsubmit={handleAddAvailability} style="margin-top: 20px;">
+      <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.95rem;">Set a block of time you are available to teach.</p>
+      
+      <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 1; min-width: 200px;">
+          <label for="start-time">Start Time</label>
+          <input type="datetime-local" id="start-time" bind:value={startTime} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;" />
+        </div>
+        <div class="form-group" style="flex: 1; min-width: 200px;">
+          <label for="end-time">End Time</label>
+          <input type="datetime-local" id="end-time" bind:value={endTime} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;" />
+        </div>
+        <button type="submit" class="save-btn" disabled={isSavingAvail} style="margin-bottom: 15px;">
+          {isSavingAvail ? 'Saving...' : 'Add Slot'}
+        </button>
       </div>
 
-      <div class="days-list">
-        <!-- Monday -->
-        <div class="day-row" class:disabled={!isMonEnabled}>
-          <span class="day-label">Monday</span>
-          <div class="slots-group">
-            <span class="time-slot">08:00 AM - 12:00 PM <span class="remove-x">×</span></span>
-            <span class="time-slot">02:00 PM - 05:00 PM <span class="remove-x">×</span></span>
-            <button class="add-slot-btn">+ Add Slot</button>
-          </div>
-          <div class="toggle-control">
-            <span class="toggle-status">{isMonEnabled ? 'Enabled' : 'Disabled'}</span>
-            <label class="switch">
-              <input type="checkbox" bind:checked={isMonEnabled} />
-              <span class="slider round"></span>
-            </label>
-          </div>
+      {#if availStatus}
+        <div style="margin-top: 10px; font-size: 0.9rem; color: {availStatus.includes('success') ? 'green' : '#e53e3e'}">
+          {availStatus}
         </div>
-
-        <!-- Tuesday -->
-        <div class="day-row" class:disabled={!isTueEnabled}>
-          <span class="day-label">Tuesday</span>
-          <div class="slots-group">
-            <span class="time-slot">10:00 AM - 04:00 PM <span class="remove-x">×</span></span>
-            <button class="add-slot-btn">+ Add Slot</button>
-          </div>
-          <div class="toggle-control">
-            <span class="toggle-status">{isTueEnabled ? 'Enabled' : 'Disabled'}</span>
-            <label class="switch">
-              <input type="checkbox" bind:checked={isTueEnabled} />
-              <span class="slider round"></span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Wednesday -->
-        <div class="day-row" class:disabled={!isWedEnabled}>
-          <span class="day-label">Wednesday</span>
-          <div class="slots-group">
-            {#if isWedEnabled}
-              <button class="add-slot-btn">+ Add Slot</button>
-            {:else}
-              <span class="no-hours-text">No teaching hours set</span>
-            {/if}
-          </div>
-          <div class="toggle-control">
-            <span class="toggle-status">{isWedEnabled ? 'Enabled' : 'Disabled'}</span>
-            <label class="switch">
-              <input type="checkbox" bind:checked={isWedEnabled} />
-              <span class="slider round"></span>
-            </label>
-          </div>
-        </div>
-      </div>
-    </div>
+      {/if}
+    </form>
   </div>
 
   <!-- Bottom cards: Preferences & Security -->
@@ -221,19 +232,26 @@
     <!-- Account Security -->
     <div class="settings-card">
       <div class="card-header-row">
-        <h3>Account Security</h3>
+        <h3>Change Password</h3>
       </div>
-
-      <div class="security-item">
-        <div class="sec-left">
-          <span class="icon"><Icon name="admin" size={18} /></span>
-          <div class="sec-text">
-            <span class="title">Password Management</span>
-            <span class="desc">Last changed 4 months ago</span>
-          </div>
+      <form class="password-form" onsubmit={handleChangePassword} style="margin-top: 15px;">
+        <div class="form-group">
+          <label for="old-pwd">Current Password</label>
+          <input type="password" id="old-pwd" bind:value={oldPassword} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 10px;" />
         </div>
-        <button class="action-btn">Change</button>
-      </div>
+        <div class="form-group">
+          <label for="new-pwd">New Password</label>
+          <input type="password" id="new-pwd" bind:value={newPassword} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 15px;" />
+        </div>
+        <button type="submit" class="save-btn" disabled={isChangingPwd}>
+          {isChangingPwd ? 'Updating...' : 'Update Password'}
+        </button>
+        {#if pwdStatus}
+          <div style="margin-top: 10px; font-size: 0.9rem; color: {pwdStatus.includes('success') ? 'green' : '#e53e3e'}">
+            {pwdStatus}
+          </div>
+        {/if}
+      </form>
     </div>
   </div>
 

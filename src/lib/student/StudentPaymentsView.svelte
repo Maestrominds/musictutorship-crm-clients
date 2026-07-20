@@ -1,11 +1,10 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
   interface StudentPayment {
     id: number;
     courseName: string;
     amount: string;
-    method: string;
-    status: 'Paid' | 'Pending';
     date: string;
   }
 
@@ -15,15 +14,15 @@
   let paymentsList = $state<StudentPayment[]>([]);
   let isLoading = $state(true);
 
+  // Backend: GET /student/payments returns Payment model { id, student_id, course_id, amount, created_at }
+  // Note: no course_title or status field in the Payment model.
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/student/payments');
       paymentsList = (data || []).map((p: any) => ({
         id: p.id,
-        courseName: p.course_title || 'Course Tuition',
+        courseName: `Course #${p.course_id}`,
         amount: `$${p.amount}`,
-        method: 'Online Payment',
-        status: 'Paid',
         date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
       }));
     } catch (err) {
@@ -39,7 +38,6 @@
   const paymentCount = $derived(paymentsList.length);
 </script>
 
-
 <div class="student-payments-view">
   <div class="header-row">
     <div class="header-text">
@@ -53,10 +51,7 @@
 
   <!-- Stats cards -->
   {#if isLoading}
-    <div class="loading-spinner-container">
-      <div class="spinner"></div>
-      <span>Loading payments...</span>
-    </div>
+    <SkeletonLoader type="table" rows={6} cols={3} />
   {:else}
     <div class="stats-row">
       <div class="stat-card">
@@ -66,45 +61,30 @@
       </div>
 
       <div class="stat-card">
-        <span class="label">OUTSTANDING BALANCE</span>
-        <div class="value">$0.00</div>
-        <span class="trend">⏳ No pending invoices</span>
+        <span class="label">PAYMENT COUNT</span>
+        <div class="value">{paymentCount}</div>
+        <span class="trend">📋 All recorded payments</span>
       </div>
 
       <div class="stat-card">
-        <span class="label">NEXT PAYMENT DATE</span>
-        <div class="value">N/A</div>
-        <span class="trend"><Icon name="activity" size={12} /> Billing managed by Admin</span>
+        <span class="label">BILLING</span>
+        <div class="value">Managed</div>
+        <span class="trend"><Icon name="activity" size={12} /> Managed by Admin</span>
       </div>
     </div>
 
     <div class="table-card">
       <div class="table-card-header">
         <h3>Payment History</h3>
-        <div class="actions">
-          <button class="icon-btn">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 6h16M6 12h12M10 18h4" />
-            </svg>
-          </button>
-          <button class="icon-btn">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        </div>
       </div>
 
       <div class="table-responsive">
         <table class="history-table">
           <thead>
             <tr>
-              <th>COURSE NAME</th>
+              <th>COURSE</th>
               <th>AMOUNT</th>
-              <th>PAYMENT METHOD</th>
-              <th>STATUS</th>
               <th>DATE</th>
-              <th>ACTION</th>
             </tr>
           </thead>
           <tbody>
@@ -117,16 +97,7 @@
                   </div>
                 </td>
                 <td class="amount-text">{pay.amount}</td>
-                <td class="method-text">
-                  <span class="card-icon"><Icon name="credit-card" size={14} /></span> {pay.method}
-                </td>
-                <td>
-                  <span class="status-badge present">{pay.status}</span>
-                </td>
                 <td class="date-text">{pay.date}</td>
-                <td>
-                  <button class="action-btn">•••</button>
-                </td>
               </tr>
             {/each}
           </tbody>
@@ -134,16 +105,7 @@
       </div>
 
       <div class="table-footer">
-        <span class="results-count">Showing 1-{paymentsList.length} of {paymentsList.length} transactions</span>
-        <div class="pagination">
-          <button class="pag-btn prev">◀</button>
-          <button class="pag-btn active">1</button>
-          <button class="pag-btn">2</button>
-          <button class="pag-btn">3</button>
-          <span class="pag-dots">...</span>
-          <button class="pag-btn">9</button>
-          <button class="pag-btn next">▶</button>
-        </div>
+        <span class="results-count">Showing {paymentsList.length} transactions</span>
       </div>
     </div>
   {/if}
@@ -205,29 +167,28 @@
 
   .stat-card .label {
     font-size: 0.75rem;
-    color: var(--text-muted);
     font-weight: 700;
+    color: var(--text-muted);
     letter-spacing: 0.5px;
   }
 
   .stat-card .value {
-    font-size: 1.6rem;
+    font-size: 1.8rem;
     font-weight: 700;
     color: var(--text-main);
-    margin-top: 4px;
   }
 
   .stat-card .trend {
-    font-size: 0.75rem;
-    font-weight: 700;
-    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
   }
 
-  .stat-card .trend.positive { color: #38a169; }
-  .stat-card .trend.warning { color: #dd6b20; }
-  .stat-card .trend.negative { color: #e53e3e; }
+  .stat-card .trend.positive {
+    color: #38a169;
+  }
 
-  /* Table styling */
+  /* Table */
   .table-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -240,55 +201,33 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px;
+    padding: 20px 24px;
     border-bottom: 1px solid var(--border-color);
   }
 
   .table-card-header h3 {
-    font-size: 0.95rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--text-main);
-  }
-
-  .actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  .icon-btn {
-    border: 1px solid var(--border-color);
-    background: transparent;
-    padding: 6px 10px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-  }
-
-  .table-responsive {
-    overflow-x: auto;
   }
 
   .history-table {
     width: 100%;
     border-collapse: collapse;
     text-align: left;
-    min-width: 600px;
   }
 
   .history-table th {
     font-size: 0.75rem;
     font-weight: 700;
     color: var(--text-muted);
-    padding: 14px 20px;
+    padding: 14px 24px;
     border-bottom: 1px solid var(--border-color);
     background-color: #fafbfc;
   }
 
   .history-table td {
-    padding: 16px 20px;
+    padding: 16px 24px;
     font-size: 0.9rem;
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
@@ -301,14 +240,14 @@
   }
 
   .course-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm);
-    background-color: #f7fafc;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background-color: #ebf8ff;
+    color: #3182ce;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--border-color);
   }
 
   .course-info {
@@ -326,72 +265,22 @@
     color: var(--text-main);
   }
 
-  .method-text {
-    font-weight: 500;
-    color: var(--text-main);
-  }
-
-  .status-badge {
-    padding: 4px 10px;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: inline-block;
-  }
-
-  .status-badge.present { background-color: #c6f6d5; color: #22543d; }
-
   .date-text {
+    color: var(--text-muted);
     font-weight: 500;
-    color: var(--text-muted);
-  }
-
-  .action-btn {
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 1.15rem;
-    cursor: pointer;
   }
 
   .table-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
+    padding: 16px 24px;
     background-color: #fafbfc;
   }
 
   .results-count {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     color: var(--text-muted);
     font-weight: 500;
-  }
-
-  .pagination {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .pag-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-muted);
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-  }
-
-  .pag-btn.active {
-    background-color: var(--primary);
-    color: white;
-    border-color: var(--primary);
-  }
-
-  @media (max-width: 768px) {
-    .stats-row { grid-template-columns: 1fr; }
   }
 </style>

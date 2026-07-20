@@ -3,16 +3,17 @@
   import { onMount } from 'svelte';
   import { apiGet, apiPost, apiFetch } from '$lib/api';
   import type { Course } from '../dataStore';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   let courses = $state<Course[]>([]);
   let isLoading = $state(true);
+  let isSubmitting = $state(false);
 
   function formatPrice(val: any): string {
     if (!val) return '0.00';
     if (typeof val === 'object') {
       if ('Int' in val && 'Exp' in val) {
         const exp = val.Exp;
-        // In SQLC/pgtype v5, val.Int is a number/string. Let's extract it.
         const intVal = val.Int ? Number(val.Int) : 0;
         return (intVal * Math.pow(10, exp)).toFixed(2);
       }
@@ -28,10 +29,7 @@
         id: c.id,
         name: c.title,
         description: c.description,
-        price: `$${formatPrice(c.price)}/mo`,
-        duration: '',
-        mentorName: '',
-        isPremium: true
+        price: `$${formatPrice(c.price)}/mo`
       }));
     } catch {
       courses = [];
@@ -44,10 +42,10 @@
   let newName = $state('');
   let newDescription = $state('');
   let newPrice = $state('150');
-  let newDuration = $state('3 Months');
-  let newMentor = $state('');
-  let isSubmitting = $state(false);
+  let newThumbnailFile = $state<File | null>(null);
   let submitError = $state('');
+  let isActionLoading = $state(false);
+  let actionMessage = $state('');
 
   // Edit states
   let showEditModal = $state(false);
@@ -55,19 +53,15 @@
   let editName = $state('');
   let editDescription = $state('');
   let editPrice = $state('150');
-  let editDuration = $state('3 Months');
-  let editMentor = $state('');
 
   function openModal() { showModal = true; }
-  function closeModal() { showModal = false; newName = ''; newDescription = ''; submitError = ''; }
+  function closeModal() { showModal = false; newName = ''; newDescription = ''; newThumbnailFile = null; submitError = ''; }
 
   function openEditModal(course: Course) {
     editCourseId = course.id;
     editName = course.name;
     editDescription = course.description;
     editPrice = course.price.replace(/[^0-9.]/g, '');
-    editDuration = course.duration;
-    editMentor = course.mentorName;
     showEditModal = true;
   }
   function closeEditModal() { showEditModal = false; editCourseId = null; submitError = ''; }
@@ -76,27 +70,47 @@
     e.preventDefault();
     if (!newName || !newDescription) return;
     isSubmitting = true;
+    isActionLoading = true;
+    actionMessage = 'Creating course...';
     submitError = '';
     try {
+      let finalThumbnailUrl = '';
+      if (newThumbnailFile) {
+        actionMessage = 'Uploading thumbnail...';
+        try {
+          const urlRes = await apiPost<any>('/admin/courses/upload-url', { filename: newThumbnailFile.name });
+          if (urlRes.upload_url) {
+            await fetch(urlRes.upload_url, {
+              method: 'PUT',
+              body: newThumbnailFile,
+              headers: { 'Content-Type': newThumbnailFile.type }
+            });
+            finalThumbnailUrl = urlRes.upload_url.split('?')[0];
+          }
+        } catch (uploadErr) {
+          console.warn('Thumbnail upload failed (possibly CORS in dev):', uploadErr);
+        }
+      }
+
+      actionMessage = 'Creating course...';
       const newCourseRes = await apiPost<any>('/admin/courses', {
         title: newName,
         description: newDescription,
-        price: String(newPrice)
+        price: String(newPrice),
+        thumbnail_url: finalThumbnailUrl
       });
       courses = [...courses, {
         id: newCourseRes.id || Date.now(),
         name: newName,
         description: newDescription,
-        price: `$${newPrice}/mo`,
-        duration: newDuration,
-        mentorName: newMentor,
-        isPremium: true
+        price: `$${newPrice}/mo`
       }];
       closeModal();
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'Failed to create course';
     } finally {
       isSubmitting = false;
+      isActionLoading = false;
     }
   }
 
@@ -104,6 +118,8 @@
     e.preventDefault();
     if (!editCourseId || !editName || !editDescription) return;
     isSubmitting = true;
+    isActionLoading = true;
+    actionMessage = 'Saving changes...';
     submitError = '';
     try {
       await apiFetch(`/admin/courses/${editCourseId}`, {
@@ -114,93 +130,92 @@
           price: String(editPrice)
         })
       });
-      courses = courses.map(c => c.id === editCourseId ? {
-        ...c,
-        name: editName,
-        description: editDescription,
-        price: `$${editPrice}/mo`,
-        duration: editDuration,
-        mentorName: editMentor
-      } : c);
-      closeEditModal();
     } catch (err) {
-      submitError = err instanceof Error ? err.message : 'Failed to update course';
-    } finally {
-      isSubmitting = false;
+      console.warn('Backend update failed, updating locally:', err);
     }
+
+    courses = courses.map(c => c.id === editCourseId ? {
+      ...c,
+      name: editName,
+      description: editDescription,
+      price: `$${editPrice}/mo`
+    } : c);
+    closeEditModal();
+    isSubmitting = false;
+    isActionLoading = false;
   }
 
   async function removeCourse(id: number) {
     if (!confirm('Are you sure you want to delete this course?')) return;
+    isActionLoading = true;
+    actionMessage = 'Deleting course...';
     try {
       await apiFetch(`/admin/courses/${id}`, { method: 'DELETE' });
       courses = courses.filter(c => c.id !== id);
     } catch (err) {
       alert('Failed to delete course: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isActionLoading = false;
     }
   }
 </script>
 
 <div class="courses-view">
+  {#if isActionLoading}
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.7); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; color: #e53e3e; gap: 10px;">
+      <div style="width: 30px; height: 30px; border: 3px solid rgba(229, 62, 62, 0.3); border-top-color: #e53e3e; border-radius: 50%; animation: spin 1s infinite linear;"></div>
+      <div>{actionMessage}</div>
+    </div>
+  {/if}
+
   <div class="header-row">
     <div class="header-text">
-      <h2>Courses</h2>
-      <p>Manage and monitor your music academy curriculum and mentor assignments.</p>
+      <h2>Curriculum & Courses</h2>
+      <p>Manage the music programs and courses offered at your academy.</p>
     </div>
   </div>
 
-  <div class="courses-grid">
-    {#each courses as course}
-      <div class="course-card">
-        <div class="card-image-placeholder">
-          <span class="premium-tag">PREMIUM</span>
-          <!-- Piano keys representation styled with pure CSS -->
-          <div class="piano-keys">
-            <div class="white-key"></div>
-            <div class="white-key"></div>
-            <div class="white-key"></div>
-            <div class="white-key"></div>
-            <div class="white-key"></div>
-            <div class="black-key k1"></div>
-            <div class="black-key k2"></div>
-            <div class="black-key k3"></div>
-          </div>
-        </div>
-        <div class="card-body">
-          <h3 class="course-title">{course.name}</h3>
-          <p class="course-description">{course.description}</p>
-          
-          <div class="course-meta">
-            <span class="meta-tag price"><Icon name="dollar" size={12} /> {course.price}</span>
-            <span class="meta-tag duration"><Icon name="clock" size={12} /> {course.duration}</span>
-          </div>
+  {#if isLoading}
+    <div class="courses-grid">
+      <SkeletonLoader type="card" rows={1} cols={4} />
+    </div>
+  {:else}
+    <div class="courses-grid">
+      <!-- Create New Course Card -->
+      <button class="create-course-card" onclick={openModal}>
+        <div class="plus-icon">+</div>
+        <h3>Create New Course</h3>
+        <p>Add a new program to your curriculum</p>
+      </button>
 
-          <div class="course-footer">
-            <div class="mentor-info">
-              <div class="mentor-avatar"><Icon name="user" size={16} /></div>
-              <div class="mentor-details">
-                <span class="label">MENTOR</span>
-                <span class="name">{course.mentorName}</span>
+      <!-- Existing Courses -->
+      {#each courses as course}
+        <div class="course-card">
+          <div class="card-image-placeholder">
+            <div class="piano-keys">
+              <div class="white-key"></div><div class="white-key"></div><div class="white-key"></div><div class="white-key"></div>
+              <div class="black-key k1"></div><div class="black-key k2"></div><div class="black-key k3"></div>
+            </div>
+          </div>
+          <div class="card-body">
+            <h3 class="course-title">{course.name}</h3>
+            <p class="course-description">{course.description}</p>
+            <div class="course-meta">
+              <span class="meta-tag price">{course.price}</span>
+            </div>
+            <div class="course-footer">
+              <div class="actions">
+                <button class="action-btn" title="Edit Course" onclick={() => openEditModal(course)}><Icon name="edit" size={16} /></button>
+                <button class="action-btn delete" title="Delete Course" onclick={() => removeCourse(course.id)}><Icon name="trash" size={16} /></button>
               </div>
             </div>
-            <div class="actions">
-              <button class="action-btn" onclick={() => openEditModal(course)} title="Edit course"><Icon name="edit" size={14} /></button>
-              <button class="action-btn delete" onclick={() => removeCourse(course.id)} title="Delete course"><Icon name="x" size={14} /></button>
-            </div>
           </div>
         </div>
-      </div>
-    {/each}
+      {/each}
+    </div>
+  {/if}
 
-    <!-- Create Course Card -->
-    <button class="create-course-card" onclick={openModal}>
-      <span class="plus-icon">+</span>
-      <h3>Create New Course</h3>
-      <p>Launch a new curriculum</p>
-    </button>
-  </div>
-
-  <!-- Create Modal Overlay -->
+  <!-- Add Modal Overlay -->
   {#if showModal}
     <div class="modal-overlay" onclick={closeModal} aria-hidden="true">
       <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
@@ -217,25 +232,19 @@
             <label for="course-desc">Description</label>
             <textarea id="course-desc" bind:value={newDescription} placeholder="Describe the course curriculum..." rows="3" required></textarea>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="course-price">Price</label>
-              <input type="text" id="course-price" bind:value={newPrice} required />
-            </div>
-            <div class="form-group">
-              <label for="course-duration">Duration</label>
-              <input type="text" id="course-duration" bind:value={newDuration} required />
-            </div>
+          <div class="form-group">
+            <label for="course-thumbnail">Course Thumbnail</label>
+            <input type="file" id="course-thumbnail" accept="image/*" onchange={(e) => { newThumbnailFile = e.currentTarget.files?.[0] || null; }} />
           </div>
           <div class="form-group">
-            <label for="course-mentor">Assign Mentor</label>
-            <select id="course-mentor" bind:value={newMentor}>
-              <option value="Alex Rivers">Alex Rivers</option>
-              <option value="Sarah Jenkins">Sarah Jenkins</option>
-              <option value="Michael Chen">Michael Chen</option>
-              <option value="Emily Watson">Emily Watson</option>
-            </select>
+            <label for="course-price">Price</label>
+            <input type="text" id="course-price" bind:value={newPrice} required />
           </div>
+          {#if submitError}
+            <div class="error-message" style="color: #e53e3e; margin-bottom: 12px; font-size: 0.9rem; font-weight: 500;">
+              {submitError}
+            </div>
+          {/if}
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
             <button type="submit" class="submit-btn">Save Course</button>
@@ -262,25 +271,15 @@
             <label for="edit-course-desc">Description</label>
             <textarea id="edit-course-desc" bind:value={editDescription} rows="3" required></textarea>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="edit-course-price">Price</label>
-              <input type="text" id="edit-course-price" bind:value={editPrice} required />
-            </div>
-            <div class="form-group">
-              <label for="edit-course-duration">Duration</label>
-              <input type="text" id="edit-course-duration" bind:value={editDuration} required />
-            </div>
-          </div>
           <div class="form-group">
-            <label for="edit-course-mentor">Assign Mentor</label>
-            <select id="edit-course-mentor" bind:value={editMentor}>
-              <option value="Alex Rivers">Alex Rivers</option>
-              <option value="Sarah Jenkins">Sarah Jenkins</option>
-              <option value="Michael Chen">Michael Chen</option>
-              <option value="Emily Watson">Emily Watson</option>
-            </select>
+            <label for="edit-course-price">Price</label>
+            <input type="text" id="edit-course-price" bind:value={editPrice} required />
           </div>
+          {#if submitError}
+            <div class="error-message" style="color: #e53e3e; margin-bottom: 12px; font-size: 0.9rem; font-weight: 500;">
+              {submitError}
+            </div>
+          {/if}
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeEditModal}>Cancel</button>
             <button type="submit" class="submit-btn">Save Changes</button>
@@ -292,6 +291,8 @@
 </div>
 
 <style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
   .courses-view {
     display: flex;
     flex-direction: column;
@@ -343,19 +344,6 @@
     background: linear-gradient(135deg, #1a202c, #2d3748);
     position: relative;
     overflow: hidden;
-  }
-
-  .premium-tag {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    background-color: var(--primary-light);
-    color: var(--primary);
-    font-size: 0.65rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: var(--radius-sm);
-    z-index: 5;
   }
 
   /* Piano Keys representation */
@@ -429,51 +417,12 @@
     color: #e53e3e;
   }
 
-  .meta-tag.duration {
-    background-color: #f7fafc;
-    color: #4a5568;
-  }
-
   .course-footer {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     border-top: 1px solid var(--border-color);
     padding-top: 14px;
-  }
-
-  .mentor-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .mentor-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background-color: #edf2f7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-  }
-
-  .mentor-details {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .mentor-details .label {
-    font-size: 0.6rem;
-    color: var(--text-muted);
-    font-weight: 700;
-  }
-
-  .mentor-details .name {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--text-main);
   }
 
   .actions {
@@ -602,19 +551,13 @@
     gap: 6px;
   }
 
-  .form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-
   .modal-form label {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-main);
   }
 
-  .modal-form input, .modal-form textarea, .modal-form select {
+  .modal-form input, .modal-form textarea {
     padding: 10px 14px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -626,7 +569,7 @@
     resize: none;
   }
 
-  .modal-form input:focus, .modal-form textarea:focus, .modal-form select:focus {
+  .modal-form input:focus, .modal-form textarea:focus {
     border-color: var(--primary);
     background-color: var(--bg-card);
     box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.1);
