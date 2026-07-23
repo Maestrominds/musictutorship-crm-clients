@@ -107,7 +107,7 @@
     <div class="table-card-header">
       <div class="title-row">
         <h3><Icon name="calendar" size={16} /> Upcoming Classes</h3>
-        <span class="count-badge">0 sessions this week</span>
+        <span class="count-badge">{upcomingClasses.length} sessions this week</span>
       </div>
     </div>
 

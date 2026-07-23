@@ -46,8 +46,25 @@
 
   const mentorName = $derived(activeMentorName);
 
-  // NOTE: activities require GET /api/student/activity — not yet implemented (see backend_dev_todo.md)
-  const activities: { type: string; detail: string; time: string; color: string; icon?: string }[] = [];
+  const courseStats = $derived(dashboardData?.course_stats || {
+    progress_percent: 0,
+    completed_modules: 0,
+    total_modules: 0,
+    completed_assignments: 0,
+    total_assignments: 0,
+    practice_hours: 0,
+    completed_exams: 0,
+    total_exams: 0
+  });
+
+  const activities = $derived(dashboardData?.recent_activity || []);
+
+  const dailyPractice = $derived(dashboardData?.daily_practice || {
+    streak_days: 0,
+    today_minutes: 0,
+    goal_minutes: 60,
+    week_history: [false, false, false, false, false, false, false]
+  });
 </script>
 
 <div class="student-dash-view">
@@ -123,27 +140,27 @@
       <div class="overall-progress-card">
         <div class="progress-header">
           <h3>Overall Course Progress</h3>
-          <span class="pct-complete">65% Complete</span>
+          <span class="pct-complete">{courseStats.progress_percent}% Complete</span>
         </div>
         <div class="bar-bg">
-          <div class="bar-fill" style="width: 65%"></div>
+          <div class="bar-fill" style="width: {courseStats.progress_percent}%"></div>
         </div>
         <div class="progress-details-grid">
           <div class="detail-box">
             <span class="lbl">Modules</span>
-            <span class="val">12 / 18</span>
+            <span class="val">{courseStats.completed_modules} / {courseStats.total_modules}</span>
           </div>
           <div class="detail-box">
             <span class="lbl">Assignments</span>
-            <span class="val">8 / 10</span>
+            <span class="val">{courseStats.completed_assignments} / {courseStats.total_assignments}</span>
           </div>
           <div class="detail-box">
             <span class="lbl">Practice Hours</span>
-            <span class="val">42.5h</span>
+            <span class="val">{courseStats.practice_hours}h</span>
           </div>
           <div class="detail-box">
             <span class="lbl">Live Exams</span>
-            <span class="val">2 / 3</span>
+            <span class="val">{courseStats.completed_exams} / {courseStats.total_exams}</span>
           </div>
         </div>
       </div>
@@ -172,15 +189,15 @@
       <!-- Daily Practice Card -->
       <div class="daily-practice-card">
         <h4>Daily Practice</h4>
-        <p>You've reached your practice goal for 5 days in a row!</p>
+        {#if dailyPractice.streak_days > 0}
+          <p>You've reached your practice goal for {dailyPractice.streak_days} days in a row!</p>
+        {:else}
+          <p>Start practicing today to build your streak!</p>
+        {/if}
         <div class="dots-row">
-          <span class="dot active"></span>
-          <span class="dot active"></span>
-          <span class="dot active"></span>
-          <span class="dot active"></span>
-          <span class="dot active"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
+          {#each dailyPractice.week_history as isActive}
+            <span class="dot" class:active={isActive}></span>
+          {/each}
         </div>
         <button class="practice-btn">Start Practice</button>
       </div>

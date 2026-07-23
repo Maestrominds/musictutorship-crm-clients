@@ -6,9 +6,10 @@
 
   interface Ticket {
     id: number;
-    subject: string;
+    title: string;
+    subject?: string;
+    description?: string;
     status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
-    priority: 'Low' | 'Medium' | 'High';
     student_id: number;
     admin_id: number | null;
     created_at: string;
@@ -191,8 +192,8 @@
             <th>ID</th>
             <th>SUBJECT</th>
             <th>STUDENT NAME</th>
+            <th>DATE</th>
             <th>STATUS</th>
-            <th>PRIORITY</th>
             <th>ACTIONS</th>
           </tr>
         </thead>
@@ -203,8 +204,11 @@
           {#each tickets as ticket}
             <tr>
               <td>#{ticket.id}</td>
-              <td class="subject-cell">{ticket.subject}</td>
+              <td class="subject-cell">{ticket.title || ticket.subject || 'No Title'}</td>
               <td>{studentsMap[ticket.student_id] || `Student #${ticket.student_id}`}</td>
+              <td style="color: var(--text-muted); font-size: 0.85rem;">
+                {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+              </td>
               <td>
                 <span class="status-badge" 
                   class:open={ticket.status === 'Open'} 
@@ -213,7 +217,6 @@
                   {ticket.status}
                 </span>
               </td>
-              <td>{ticket.priority}</td>
               <td>
                 <div class="actions-row">
                   {#if !ticket.admin_id}
@@ -248,12 +251,27 @@
               <div class="spinner"></div>
               <p>Connecting to chat...</p>
             </div>
-          {:else if chatMessages.length === 0}
-            <div class="empty-chat-state">
-              <Icon name="message-circle" size={48} color="#cbd5e0" />
-              <p>No messages yet. Start the conversation!</p>
-            </div>
           {:else}
+            <!-- Original Request Bubble -->
+            {#if tickets.find(t => t.id === activeTicketId)?.description}
+              <div class="message received">
+                <div class="msg-avatar">
+                  <Icon name="user" size={14} />
+                </div>
+                <div class="msg-bubble original-request">
+                  <strong>Original Request:</strong><br/>
+                  {tickets.find(t => t.id === activeTicketId)?.description}
+                </div>
+                <div class="msg-time">{new Date(tickets.find(t => t.id === activeTicketId)?.created_at || '').toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+              </div>
+            {/if}
+
+            {#if chatMessages.length === 0}
+              <div class="empty-chat-state" style="margin-top: 20px;">
+                <Icon name="message-circle" size={48} color="#cbd5e0" />
+                <p>No replies yet. Start the conversation!</p>
+              </div>
+            {/if}
             {#each chatMessages as msg}
               <div class="message {msg.sender_id === currentUserId ? 'sent' : 'received'}">
                 {#if msg.sender_id !== currentUserId}
@@ -510,13 +528,17 @@
 
   .msg-bubble {
     padding: 12px 16px;
-    border-radius: 16px;
-    font-size: 0.95rem;
-    line-height: 1.5;
+    border-radius: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    line-height: 1.4;
   }
-
-  .message.sent .msg-bubble {
+  .original-request {
+    background: #fdf6e3;
+    border-color: #f6e0b5;
+  }
+  .sent .msg-bubble {
     background: linear-gradient(135deg, var(--primary), #fc8181);
     color: white;
     border-bottom-right-radius: 4px;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { apiPost } from '$lib/api';
+  import { apiPost, apiFetch } from '$lib/api';
 
   // Profile settings state
   let fullName = $state('');
@@ -25,6 +25,10 @@
   let pwdStatus = $state('');
   let isChangingPwd = $state(false);
 
+  // Profile Save Status
+  let profileSaveStatus = $state('');
+  let isSavingProfile = $state(false);
+
   onMount(() => {
     const userJson = localStorage.getItem('user');
     if (userJson) {
@@ -40,8 +44,43 @@
     }
   });
 
-  function saveChanges() {
-    alert('Changes saved successfully!');
+  async function saveChanges() {
+    if (!fullName || !emailAddress) {
+      profileSaveStatus = 'Name and Email are required.';
+      return;
+    }
+    isSavingProfile = true;
+    profileSaveStatus = '';
+    
+    try {
+      await apiFetch('/mentor/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: fullName,
+          email: emailAddress,
+          phone: phoneNumber,
+          specialty: specialty
+        })
+      });
+      
+      profileSaveStatus = 'Profile updated successfully!';
+      
+      // Update local storage
+      const userJson = localStorage.getItem('user');
+      if (userJson) {
+        const user = JSON.parse(userJson);
+        user.name = fullName;
+        user.email = emailAddress;
+        user.phone = phoneNumber;
+        user.specialty = specialty;
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+    } catch (err: any) {
+      profileSaveStatus = err.message || 'Failed to update profile.';
+    } finally {
+      isSavingProfile = false;
+      setTimeout(() => profileSaveStatus = '', 4000);
+    }
   }
 
   async function handleAddAvailability(e: SubmitEvent) {
@@ -104,7 +143,14 @@
   <div class="settings-card">
     <div class="card-header-row">
       <h3>Profile Information</h3>
-      <button class="save-btn" onclick={saveChanges}>Save Changes</button>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        {#if profileSaveStatus}
+          <span style="font-size: 0.85rem; font-weight: 600; color: {profileSaveStatus.includes('success') ? 'green' : '#e53e3e'}">{profileSaveStatus}</span>
+        {/if}
+        <button class="save-btn" onclick={saveChanges} disabled={isSavingProfile}>
+          {isSavingProfile ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
     </div>
 
     <div class="profile-info-grid">

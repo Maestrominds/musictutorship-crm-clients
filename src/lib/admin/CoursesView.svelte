@@ -2,10 +2,11 @@
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { apiGet, apiPost, apiFetch } from '$lib/api';
-  import type { Course } from '../dataStore';
+  import type { Course, Mentor } from '../dataStore';
   import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   let courses = $state<Course[]>([]);
+  let mentorsList = $state<Mentor[]>([]);
   let isLoading = $state(true);
   let isSubmitting = $state(false);
 
@@ -24,12 +25,24 @@
 
   onMount(async () => {
     try {
-      const data = await apiGet<any[]>('/admin/courses');
-      courses = (data || []).map(c => ({
+      const [coursesData, mentorsData] = await Promise.all([
+        apiGet<any[]>('/admin/courses'),
+        apiGet<any[]>('/admin/mentors')
+      ]);
+      mentorsList = (mentorsData || []).map(m => ({
+        id: m.id,
+        name: m.name,
+        role: 'mentor',
+        email: m.email
+      }));
+      courses = (coursesData || []).map(c => ({
         id: c.id,
         name: c.title,
         description: c.description,
-        price: `$${formatPrice(c.price)}/mo`
+        price: `$${formatPrice(c.price)}/mo`,
+        duration: c.duration,
+        mentor_name: c.mentor_name,
+        mentor_id: c.mentor_id
       }));
     } catch {
       courses = [];
@@ -42,6 +55,8 @@
   let newName = $state('');
   let newDescription = $state('');
   let newPrice = $state('150');
+  let newDuration = $state('');
+  let newMentorId = $state<number | ''>('');
   let newThumbnailFile = $state<File | null>(null);
   let submitError = $state('');
   let isActionLoading = $state(false);
@@ -53,15 +68,20 @@
   let editName = $state('');
   let editDescription = $state('');
   let editPrice = $state('150');
+  let editDuration = $state('');
+  let editMentorId = $state<number | ''>('');
 
   function openModal() { showModal = true; }
-  function closeModal() { showModal = false; newName = ''; newDescription = ''; newThumbnailFile = null; submitError = ''; }
+  function closeModal() { showModal = false; newName = ''; newDescription = ''; newDuration = ''; newMentorId = ''; newThumbnailFile = null; submitError = ''; }
 
   function openEditModal(course: Course) {
     editCourseId = course.id;
     editName = course.name;
     editDescription = course.description;
     editPrice = course.price.replace(/[^0-9.]/g, '');
+    editDuration = course.duration || '';
+    const foundMentor = mentorsList.find(m => m.name === course.mentor_name);
+    editMentorId = course.mentor_id || (foundMentor ? foundMentor.id : '');
     showEditModal = true;
   }
   function closeEditModal() { showEditModal = false; editCourseId = null; submitError = ''; }
@@ -69,6 +89,15 @@
   async function createCourse(e: SubmitEvent) {
     e.preventDefault();
     if (!newName || !newDescription) return;
+    
+    if (newMentorId) {
+      const isMentorAlreadyAssigned = courses.some(c => c.mentor_id === Number(newMentorId));
+      if (isMentorAlreadyAssigned) {
+        submitError = 'This mentor is already assigned to another course. A mentor can only teach one course.';
+        return;
+      }
+    }
+
     isSubmitting = true;
     isActionLoading = true;
     actionMessage = 'Creating course...';
@@ -97,13 +126,31 @@
         title: newName,
         description: newDescription,
         price: String(newPrice),
+        duration: newDuration,
         thumbnail_url: finalThumbnailUrl
       });
+      
+      const newCourseId = newCourseRes.id || Date.now();
+
+      if (newMentorId) {
+        actionMessage = 'Assigning mentor...';
+        try {
+           await apiPost<any>('/admin/assign', { course_id: newCourseId, user_id: Number(newMentorId) });
+        } catch(assignErr) {
+           console.warn('Failed to assign mentor:', assignErr);
+        }
+      }
+
+      const assignedMentor = mentorsList.find(m => m.id === Number(newMentorId));
+
       courses = [...courses, {
-        id: newCourseRes.id || Date.now(),
+        id: newCourseId,
         name: newName,
         description: newDescription,
-        price: `$${newPrice}/mo`
+        price: `$${newPrice}/mo`,
+        duration: newDuration,
+        mentor_name: assignedMentor ? assignedMentor.name : undefined,
+        mentor_id: newMentorId ? Number(newMentorId) : undefined
       }];
       closeModal();
     } catch (err) {
@@ -117,6 +164,15 @@
   async function updateCourse(e: SubmitEvent) {
     e.preventDefault();
     if (!editCourseId || !editName || !editDescription) return;
+
+    if (editMentorId) {
+      const isMentorAlreadyAssigned = courses.some(c => c.mentor_id === Number(editMentorId) && c.id !== editCourseId);
+      if (isMentorAlreadyAssigned) {
+        submitError = 'This mentor is already assigned to another course. A mentor can only teach one course.';
+        return;
+      }
+    }
+
     isSubmitting = true;
     isActionLoading = true;
     actionMessage = 'Saving changes...';
@@ -127,18 +183,33 @@
         body: JSON.stringify({
           title: editName,
           description: editDescription,
-          price: String(editPrice)
+          price: String(editPrice),
+          duration: editDuration
         })
       });
+
+      if (editMentorId) {
+        actionMessage = 'Updating mentor assignment...';
+        try {
+           await apiPost<any>('/admin/assign', { course_id: editCourseId, user_id: Number(editMentorId) });
+        } catch(assignErr) {
+           console.warn('Failed to assign mentor:', assignErr);
+        }
+      }
     } catch (err) {
       console.warn('Backend update failed, updating locally:', err);
     }
+
+    const assignedMentor = mentorsList.find(m => m.id === Number(editMentorId));
 
     courses = courses.map(c => c.id === editCourseId ? {
       ...c,
       name: editName,
       description: editDescription,
-      price: `$${editPrice}/mo`
+      price: `$${editPrice}/mo`,
+      duration: editDuration,
+      mentor_name: editMentorId ? (assignedMentor ? assignedMentor.name : c.mentor_name) : c.mentor_name,
+      mentor_id: editMentorId ? Number(editMentorId) : c.mentor_id
     } : c);
     closeEditModal();
     isSubmitting = false;
@@ -202,6 +273,12 @@
             <p class="course-description">{course.description}</p>
             <div class="course-meta">
               <span class="meta-tag price">{course.price}</span>
+              {#if course.duration}
+                <span class="meta-tag duration" style="background-color: #ebf8ff; color: #2b6cb0; display: flex; align-items: center; gap: 4px;"><Icon name="clock" size={12} /> {course.duration}</span>
+              {/if}
+              {#if course.mentor_name}
+                <span class="meta-tag mentor" style="background-color: #faf5ff; color: #805ad5; display: flex; align-items: center; gap: 4px;"><Icon name="user" size={12} /> {course.mentor_name}</span>
+              {/if}
             </div>
             <div class="course-footer">
               <div class="actions">
@@ -240,6 +317,19 @@
             <label for="course-price">Price</label>
             <input type="text" id="course-price" bind:value={newPrice} required />
           </div>
+          <div class="form-group">
+            <label for="course-duration">Duration</label>
+            <input type="text" id="course-duration" bind:value={newDuration} placeholder="e.g. 12 weeks" />
+          </div>
+          <div class="form-group">
+            <label for="course-mentor">Assign Mentor</label>
+            <select id="course-mentor" bind:value={newMentorId} class="select-input">
+              <option value="">-- No Mentor Assigned --</option>
+              {#each mentorsList as mentor}
+                <option value={mentor.id}>{mentor.name}</option>
+              {/each}
+            </select>
+          </div>
           {#if submitError}
             <div class="error-message" style="color: #e53e3e; margin-bottom: 12px; font-size: 0.9rem; font-weight: 500;">
               {submitError}
@@ -274,6 +364,19 @@
           <div class="form-group">
             <label for="edit-course-price">Price</label>
             <input type="text" id="edit-course-price" bind:value={editPrice} required />
+          </div>
+          <div class="form-group">
+            <label for="edit-course-duration">Duration</label>
+            <input type="text" id="edit-course-duration" bind:value={editDuration} placeholder="e.g. 12 weeks" />
+          </div>
+          <div class="form-group">
+            <label for="edit-course-mentor">Assign Mentor</label>
+            <select id="edit-course-mentor" bind:value={editMentorId} class="select-input">
+              <option value="">-- No Mentor Assigned --</option>
+              {#each mentorsList as mentor}
+                <option value={mentor.id}>{mentor.name}</option>
+              {/each}
+            </select>
           </div>
           {#if submitError}
             <div class="error-message" style="color: #e53e3e; margin-bottom: 12px; font-size: 0.9rem; font-weight: 500;">
@@ -557,7 +660,7 @@
     color: var(--text-main);
   }
 
-  .modal-form input, .modal-form textarea {
+  .modal-form input, .modal-form textarea, .modal-form .select-input {
     padding: 10px 14px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -569,7 +672,7 @@
     resize: none;
   }
 
-  .modal-form input:focus, .modal-form textarea:focus {
+  .modal-form input:focus, .modal-form textarea:focus, .modal-form .select-input:focus {
     border-color: var(--primary);
     background-color: var(--bg-card);
     box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.1);

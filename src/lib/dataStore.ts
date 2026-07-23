@@ -4,6 +4,9 @@ export interface Student {
   id: number;
   name: string;
   email: string;
+  mentor_name?: string;
+  course_id?: number;
+  course_name?: string;
 }
 
 export interface Mentor {
@@ -11,6 +14,11 @@ export interface Mentor {
   name: string;
   role: string;
   email: string;
+  specialty?: string;
+  phone?: string;
+  status?: string;
+  assigned_course?: string;
+  student_count?: number;
 }
 
 export interface Course {
@@ -18,6 +26,9 @@ export interface Course {
   name: string;
   description: string;
   price: string;
+  duration?: string;
+  mentor_name?: string;
+  mentor_id?: number;
 }
 
 // Stores start empty — data is fetched from the backend API

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
-  import { apiGet } from '$lib/api';
+  import { apiGet, apiFetch } from '$lib/api';
   import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   // We define a simple interface for the payment row
@@ -11,6 +11,7 @@
     course: string;
     amount: string;
     paymentDate: string;
+    status: string;
   }
 
   let payments = $state<Payment[]>([]);
@@ -25,7 +26,8 @@
         name: p.student_name || 'Student',
         course: p.course_title || 'Course Tuition',
         amount: `$${p.amount}`,
-        paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
+        paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
+        status: p.status || 'paid'
       }));
     } catch {
       payments = []; // Not yet available — show empty state
@@ -45,6 +47,21 @@
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 1);
+  }
+
+  async function updateStatus(id: number, currentStatus: string) {
+    const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+    payments = payments.map(p => p.id === id ? { ...p, status: newStatus } : p);
+    try {
+      await apiFetch(`/admin/payments/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus })
+      });
+    } catch (err) {
+      console.warn('Failed to update status, reverting...', err);
+      payments = payments.map(p => p.id === id ? { ...p, status: currentStatus } : p);
+      alert('Failed to update payment status: ' + (err instanceof Error ? err.message : String(err)));
+    }
   }
 </script>
 
@@ -95,6 +112,7 @@
           <th>STUDENT NAME</th>
           <th>AMOUNT & COURSE</th>
           <th>DATE</th>
+          <th>STATUS</th>
         </tr>
       </thead>
       <tbody>
@@ -120,6 +138,13 @@
                 </div>
               </td>
               <td class="date-text">{transaction.paymentDate}</td>
+              <td>
+                <button 
+                  onclick={() => updateStatus(transaction.id, transaction.status)}
+                  style="border: none; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; cursor: pointer; background-color: {transaction.status === 'paid' ? '#c6f6d5' : '#feebc8'}; color: {transaction.status === 'paid' ? '#22543d' : '#744210'}; text-transform: uppercase;">
+                  {transaction.status}
+                </button>
+              </td>
             </tr>
           {/each}
         {/if}

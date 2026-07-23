@@ -6,10 +6,11 @@
   import MentorClassesView from './mentor/MentorClassesView.svelte';
   import MentorAttendanceView from './mentor/MentorAttendanceView.svelte';
   import MentorProfileView from './mentor/MentorProfileView.svelte';
+  import MentorSupportView from './mentor/MentorSupportView.svelte';
   import SkeletonLoader from './SkeletonLoader.svelte';
   let { data } = $props<{ data: any }>();
 
-  let activeSubView = $state<'dashboard' | 'students' | 'classes' | 'attendance' | 'profile'>(
+  let activeSubView = $state<'dashboard' | 'students' | 'classes' | 'attendance' | 'profile' | 'support'>(
     (typeof window !== 'undefined' ? localStorage.getItem('mentorActiveSubView') as any : null) || 'dashboard'
   );
   let isPageTransitioning = $state(false);
@@ -70,6 +71,9 @@
       <button class="nav-item" class:active={activeSubView === 'attendance'} onclick={() => navigateTo('attendance')}>
         <span class="nav-icon"><Icon name="clipboard" size={16} /></span> Attendance
       </button>
+      <button class="nav-item" class:active={activeSubView === 'support'} onclick={() => navigateTo('support')}>
+        <span class="nav-icon"><Icon name="message-square" size={16} /></span> Support Tickets
+      </button>
       <button class="nav-item" class:active={activeSubView === 'profile'} onclick={() => navigateTo('profile')}>
         <span class="nav-icon"><Icon name="user" size={16} /></span> Profile
       </button>
@@ -117,6 +121,8 @@
         <MentorClassesView />
       {:else if activeSubView === 'attendance'}
         <MentorAttendanceView />
+      {:else if activeSubView === 'support'}
+        <MentorSupportView />
       {:else if activeSubView === 'profile'}
         <MentorProfileView />
       {/if}

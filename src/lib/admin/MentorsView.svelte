@@ -15,7 +15,12 @@
         id: m.id,
         name: m.name,
         role: 'mentor',
-        email: m.email
+        email: m.email,
+        specialty: m.specialty,
+        phone: m.phone,
+        status: m.mentor_status || m.status || 'active',
+        assigned_course: m.assigned_course,
+        student_count: m.student_count || 0
       }));
     } catch {
       mentors = []; // Not yet available — show empty state
@@ -37,6 +42,9 @@
   // Form states
   let newName = $state('');
   let newEmail = $state('');
+  let newSpecialty = $state('');
+  let newPhone = $state('');
+  let newStatus = $state('active');
 
   let isActionLoading = $state(false);
   let actionMessage = $state('');
@@ -46,6 +54,9 @@
   let editMentorId = $state<number | null>(null);
   let editName = $state('');
   let editEmail = $state('');
+  let editSpecialty = $state('');
+  let editPhone = $state('');
+  let editStatus = $state('active');
 
   function openModal() {
     showModal = true;
@@ -55,12 +66,18 @@
     showModal = false;
     newName = '';
     newEmail = '';
+    newSpecialty = '';
+    newPhone = '';
+    newStatus = 'active';
   }
 
   function openEditModal(mentor: Mentor) {
     editMentorId = mentor.id;
     editName = mentor.name;
     editEmail = mentor.email;
+    editSpecialty = mentor.specialty || '';
+    editPhone = mentor.phone || '';
+    editStatus = mentor.status || 'active';
     showEditModal = true;
   }
   function closeEditModal() { showEditModal = false; editMentorId = null; }
@@ -92,7 +109,10 @@
       const res = await apiPost<any>('/admin/users', {
         name: newName,
         email: newEmail,
-        role: 'mentor'
+        role: 'mentor',
+        specialty: newSpecialty,
+        phone: newPhone,
+        mentor_status: newStatus
       });
       const userId = res.id || Date.now();
 
@@ -100,7 +120,10 @@
         id: userId,
         name: newName,
         role: 'mentor',
-        email: newEmail
+        email: newEmail,
+        specialty: newSpecialty,
+        phone: newPhone,
+        status: newStatus
       };
 
       mentors = [...mentors, newMentor];
@@ -120,7 +143,7 @@
     try {
       await apiFetch(`/admin/users/${editMentorId}`, {
         method: 'PUT',
-        body: JSON.stringify({ name: editName, email: editEmail })
+        body: JSON.stringify({ name: editName, email: editEmail, specialty: editSpecialty, phone: editPhone, mentor_status: editStatus })
       });
     } catch (err) {
       console.warn('Backend update failed, updating locally:', err);
@@ -129,7 +152,10 @@
     mentors = mentors.map(m => m.id === editMentorId ? { 
       ...m, 
       name: editName, 
-      email: editEmail
+      email: editEmail,
+      specialty: editSpecialty,
+      phone: editPhone,
+      status: editStatus
     } : m);
     closeEditModal();
     isActionLoading = false;
@@ -188,6 +214,8 @@
           <tr>
             <th>MENTOR NAME</th>
             <th>EMAIL</th>
+            <th>ASSIGNED COURSE</th>
+            <th>STUDENTS</th>
             <th style="text-align: right;">ACTIONS</th>
           </tr>
         </thead>
@@ -211,9 +239,19 @@
                 <td>
                   <div class="email">{mentor.email}</div>
                 </td>
-                <td style="text-align: right;">
-                  <button onclick={() => openEditModal(mentor)} style="background: none; border: none; font-size: 0.9rem; cursor: pointer; padding: 6px; color: var(--text-main); margin-right: 8px;">Edit</button>
-                  <button onclick={() => deleteMentor(mentor.id)} style="background: none; border: none; font-size: 0.9rem; cursor: pointer; padding: 6px; color: #e53e3e;">Delete</button>
+                <td>
+                  <span style="font-weight: 500; color: var(--text-main);">
+                    {mentor.assigned_course || 'None'}
+                  </span>
+                </td>
+                <td>
+                  <span style="background: #e2e8f0; color: #4a5568; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85rem;">
+                    {mentor.student_count || 0}
+                  </span>
+                </td>
+                <td style="text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
+                  <button onclick={() => openEditModal(mentor)} style="background: #ebf8ff; border: 1px solid #bee3f8; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #2b6cb0; border-radius: 6px; transition: all 0.2s;">Edit</button>
+                  <button onclick={() => deleteMentor(mentor.id)} style="background: #fff5f5; border: 1px solid #fed7d7; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #e53e3e; border-radius: 6px; transition: all 0.2s;">Delete</button>
                 </td>
               </tr>
             {/each}
@@ -252,6 +290,10 @@
           
           <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--text-muted);">
             <div><strong>Email:</strong> {mentor.email}</div>
+            <div><strong>Specialty:</strong> {mentor.specialty || 'N/A'}</div>
+            <div><strong>Course:</strong> {mentor.assigned_course || 'None'}</div>
+            <div><strong>Students:</strong> {mentor.student_count || 0}</div>
+            <div><strong>Status:</strong> <span style="text-transform: capitalize;">{mentor.status || 'Active'}</span></div>
           </div>
         </div>
       {/each}
@@ -275,6 +317,21 @@
           <div class="form-group">
             <label for="mentor-email">Email Address</label>
             <input type="email" id="mentor-email" bind:value={newEmail} placeholder="mentor@academy.com" required />
+          </div>
+          <div class="form-group">
+            <label for="mentor-specialty">Specialty</label>
+            <input type="text" id="mentor-specialty" bind:value={newSpecialty} placeholder="e.g. Piano, Violin" />
+          </div>
+          <div class="form-group">
+            <label for="mentor-phone">Phone</label>
+            <input type="text" id="mentor-phone" bind:value={newPhone} placeholder="+1..." />
+          </div>
+          <div class="form-group">
+            <label for="mentor-status">Status</label>
+            <select id="mentor-status" bind:value={newStatus} class="select-input">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
@@ -301,6 +358,21 @@
           <div class="form-group">
             <label for="edit-mentor-email">Email Address</label>
             <input type="email" id="edit-mentor-email" bind:value={editEmail} required />
+          </div>
+          <div class="form-group">
+            <label for="edit-mentor-specialty">Specialty</label>
+            <input type="text" id="edit-mentor-specialty" bind:value={editSpecialty} />
+          </div>
+          <div class="form-group">
+            <label for="edit-mentor-phone">Phone</label>
+            <input type="text" id="edit-mentor-phone" bind:value={editPhone} />
+          </div>
+          <div class="form-group">
+            <label for="edit-mentor-status">Status</label>
+            <select id="edit-mentor-status" bind:value={editStatus} class="select-input">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeEditModal}>Cancel</button>
@@ -330,6 +402,12 @@
           <div style="display: grid; grid-template-columns: 100px 1fr; gap: 10px; line-height: 1.5;">
             <strong style="color: var(--text-muted);">Email:</strong>
             <span>{selectedMentor.email}</span>
+            <strong style="color: var(--text-muted);">Phone:</strong>
+            <span>{selectedMentor.phone || 'N/A'}</span>
+            <strong style="color: var(--text-muted);">Specialty:</strong>
+            <span>{selectedMentor.specialty || 'N/A'}</span>
+            <strong style="color: var(--text-muted);">Status:</strong>
+            <span style="text-transform: capitalize;">{selectedMentor.status || 'Active'}</span>
           </div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
@@ -576,7 +654,7 @@
     color: var(--text-main);
   }
 
-  .modal-form input {
+  .modal-form input, .modal-form .select-input {
     padding: 10px 14px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -587,7 +665,7 @@
     width: 100%;
   }
 
-  .modal-form input:focus {
+  .modal-form input:focus, .modal-form .select-input:focus {
     border-color: var(--primary);
     background-color: var(--bg-card);
     box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.1);

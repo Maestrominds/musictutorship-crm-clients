@@ -5,11 +5,12 @@
   import StudentCoursesView from './student/StudentCoursesView.svelte';
   import StudentScheduleView from './student/StudentScheduleView.svelte';
   import StudentPaymentsView from './student/StudentPaymentsView.svelte';
+  import StudentSupportView from './student/StudentSupportView.svelte';
   import SkeletonLoader from './SkeletonLoader.svelte';
 
   let { data } = $props<{ data: any }>();
 
-  let activeSubView = $state<'dashboard' | 'courses' | 'schedule' | 'payments'>(
+  let activeSubView = $state<'dashboard' | 'courses' | 'schedule' | 'payments' | 'support'>(
     (typeof window !== 'undefined' ? localStorage.getItem('studentActiveSubView') as any : null) || 'dashboard'
   );
   let isPageTransitioning = $state(false);
@@ -69,6 +70,9 @@
       <button class="nav-item" class:active={activeSubView === 'payments'} onclick={() => navigateTo('payments')}>
         <span class="nav-icon"><Icon name="dollar" size={16} /></span> Payments
       </button>
+      <button class="nav-item" class:active={activeSubView === 'support'} onclick={() => navigateTo('support')}>
+        <span class="nav-icon"><Icon name="message-square" size={16} /></span> Support Tickets
+      </button>
       <button class="nav-item"><span class="nav-icon"><Icon name="user" size={16} /></span> Profile</button>
     </nav>
 
@@ -114,6 +118,8 @@
         <StudentScheduleView dashboardData={data?.dashboardData} />
       {:else if activeSubView === 'payments'}
         <StudentPaymentsView />
+      {:else if activeSubView === 'support'}
+        <StudentSupportView />
       {/if}
     </div>
   </main>

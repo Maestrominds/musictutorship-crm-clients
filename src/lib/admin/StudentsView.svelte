@@ -2,10 +2,11 @@
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { apiGet, apiFetch, apiPost } from '$lib/api';
-  import type { Student } from '../dataStore';
+  import type { Student, Course } from '../dataStore';
   import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   let students = $state<Student[]>([]);
+  let courses = $state<Course[]>([]);
   let isLoading = $state(true);
   
   // Modals state
@@ -15,11 +16,13 @@
   // New Student state
   let newStudentName = $state('');
   let newStudentEmail = $state('');
+  let newCourseId = $state<number | null>(null);
 
   // Edit Student state
   let editStudentId = $state<number | null>(null);
   let editName = $state('');
   let editEmail = $state('');
+  let editCourseId = $state<number | null>(null);
 
   // Action state
   let isActionLoading = $state(false);
@@ -38,12 +41,26 @@
 
   onMount(async () => {
     try {
-      const usersData = await apiGet<any[]>('/admin/students');
+      const [usersData, coursesData] = await Promise.all([
+        apiGet<any[]>('/admin/students').catch(() => []),
+        apiGet<any[]>('/admin/courses').catch(() => [])
+      ]);
+      
+      courses = (coursesData || []).map(c => ({
+        id: c.id,
+        name: c.title,
+        description: c.description || '',
+        price: c.price || ''
+      }));
+
       if (usersData) {
         students = usersData.map(u => ({
           id: u.id,
           name: u.name,
-          email: u.email
+          email: u.email,
+          mentor_name: u.mentor_name,
+          course_id: u.course_id,
+          course_name: u.course_name
         }));
       }
     } catch {
@@ -61,18 +78,21 @@
     showAddModal = false;
     newStudentName = '';
     newStudentEmail = '';
+    newCourseId = null;
   }
 
   function openEditModal(student: Student) {
     editStudentId = student.id;
     editName = student.name;
     editEmail = student.email;
+    editCourseId = student.course_id || null;
     showEditModal = true;
   }
 
   function closeEditModal() {
     showEditModal = false;
     editStudentId = null;
+    editCourseId = null;
   }
 
   async function addStudent(e: SubmitEvent) {
@@ -89,10 +109,22 @@
       });
       const newId = res.id || Date.now();
       
+      let assignedCourseName = undefined;
+      if (newCourseId) {
+        try {
+          await apiPost('/admin/assign', { course_id: newCourseId, user_id: newId });
+          assignedCourseName = courses.find(c => c.id === newCourseId)?.name;
+        } catch (err) {
+          console.warn('Failed to assign course:', err);
+        }
+      }
+
       const newStudent: Student = {
         id: newId,
         name: newStudentName,
-        email: newStudentEmail
+        email: newStudentEmail,
+        course_id: newCourseId || undefined,
+        course_name: assignedCourseName
       };
       
       students = [...students, newStudent];
@@ -115,14 +147,20 @@
         method: 'PUT',
         body: JSON.stringify({ name: editName, email: editEmail })
       });
+      if (editCourseId) {
+        await apiPost('/admin/assign', { course_id: editCourseId, user_id: editStudentId });
+      }
     } catch (err) {
       console.warn('Backend update failed, updating locally:', err);
     }
     
+    let assignedCourseName = courses.find(c => c.id === editCourseId)?.name;
     students = students.map(s => s.id === editStudentId ? { 
       ...s, 
       name: editName, 
-      email: editEmail
+      email: editEmail,
+      course_id: editCourseId || undefined,
+      course_name: assignedCourseName || s.course_name
     } : s);
     closeEditModal();
     isActionLoading = false;
@@ -182,13 +220,14 @@
           <tr>
             <th>STUDENT NAME</th>
             <th>EMAIL</th>
+            <th>ASSIGNED COURSE</th>
             <th style="text-align: right;">ACTIONS</th>
           </tr>
         </thead>
         <tbody>
           {#if filteredStudents.length === 0}
             <tr>
-              <td colspan="3" class="empty-row">No students found matching your search.</td>
+              <td colspan="4" class="empty-row">No students found matching your search.</td>
             </tr>
           {:else}
             {#each filteredStudents as student}
@@ -202,9 +241,27 @@
                 <td>
                   <span class="email">{student.email}</span>
                 </td>
-                <td style="text-align: right;">
-                  <button onclick={() => openEditModal(student)} style="background: none; border: none; font-size: 0.9rem; cursor: pointer; padding: 6px; color: var(--text-main); margin-right: 8px;">Edit</button>
-                  <button onclick={() => deleteStudent(student.id)} style="background: none; border: none; font-size: 0.9rem; cursor: pointer; padding: 6px; color: #e53e3e;">Delete</button>
+                <td>
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-main);">
+                      {#if student.course_name}
+                        {student.course_name}
+                      {:else}
+                        <span style="color: var(--text-muted); font-style: italic;">No course assigned</span>
+                      {/if}
+                    </span>
+                    <span class="mentor" style="color: var(--text-muted); font-size: 0.75rem; background: #f7fafc; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; width: fit-content;">
+                      {#if student.mentor_name}
+                        <Icon name="user" size={10} /> Mentor: {student.mentor_name}
+                      {:else}
+                        No mentor
+                      {/if}
+                    </span>
+                  </div>
+                </td>
+                <td style="text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
+                  <button onclick={() => openEditModal(student)} style="background: #ebf8ff; border: 1px solid #bee3f8; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #2b6cb0; border-radius: 6px; transition: all 0.2s;">Edit</button>
+                  <button onclick={() => deleteStudent(student.id)} style="background: #fff5f5; border: 1px solid #fed7d7; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #e53e3e; border-radius: 6px; transition: all 0.2s;">Delete</button>
                 </td>
               </tr>
             {/each}
@@ -235,6 +292,15 @@
             <label for="edit-student-email" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Email Address</label>
             <input type="email" id="edit-student-email" bind:value={editEmail} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;" required />
           </div>
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="edit-course" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Assign Course</label>
+            <select id="edit-course" bind:value={editCourseId} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; background: white;">
+              <option value={null}>-- Select a Course --</option>
+              {#each courses as course}
+                <option value={course.id}>{course.name}</option>
+              {/each}
+            </select>
+          </div>
           <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
             <button type="button" class="cancel-btn" onclick={closeEditModal} style="padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 4px; background: white; cursor: pointer;">Cancel</button>
             <button type="submit" class="submit-btn" style="padding: 8px 16px; border: none; border-radius: 4px; background: #e53e3e; color: white; cursor: pointer; font-weight: 600;">Save Changes</button>
@@ -260,6 +326,15 @@
           <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
             <label for="new-student-email" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Email Address</label>
             <input type="email" id="new-student-email" bind:value={newStudentEmail} placeholder="john@example.com" style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;" required />
+          </div>
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="new-course" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Assign Course</label>
+            <select id="new-course" bind:value={newCourseId} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; background: white;">
+              <option value={null}>-- Select a Course --</option>
+              {#each courses as course}
+                <option value={course.id}>{course.name}</option>
+              {/each}
+            </select>
           </div>
           <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
             <button type="button" class="cancel-btn" onclick={closeAddModal} style="padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 4px; background: white; cursor: pointer;">Cancel</button>

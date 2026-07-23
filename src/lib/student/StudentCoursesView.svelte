@@ -17,13 +17,18 @@
 
   let inProgressCourses = $state<StudentCourse[]>([]);
   let upcomingSessions = $state<{ id: number; title: string; instructor: string; date: string; time: string; isActionable: boolean }[]>([]);
+  let dailyGoal = $state({ minutes: 0, target: 60, progress_pct: 0 });
   let isLoading = $state(true);
 
   // GET /api/student/courses returns GetStudentCoursesListRow { id, course_title, mentor_name, progress_percent, total_lessons, completed_lessons }
   onMount(async () => {
     try {
-      const data = await apiGet<any[]>('/student/courses');
-      inProgressCourses = (data || []).map(c => ({
+      const [coursesData, dashboardData] = await Promise.all([
+        apiGet<any[]>('/student/courses').catch(() => []),
+        apiGet<any>('/student/dashboard').catch(() => null)
+      ]);
+      
+      inProgressCourses = (coursesData || []).map(c => ({
         id: c.id,
         title: c.course_title,
         mentor: c.mentor_name || 'Assigned Mentor',
@@ -31,6 +36,26 @@
         totalLessons: c.total_lessons || 0,
         completedLessons: c.completed_lessons || 0
       }));
+      
+      if (dashboardData) {
+        upcomingSessions = (dashboardData.upcoming_classes || []).map((c: any) => ({
+          id: c.id,
+          title: c.title || 'Music Session',
+          instructor: c.mentor_name || 'Assigned Mentor',
+          date: c.scheduled_at ? new Date(c.scheduled_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'TBD',
+          time: c.scheduled_at ? new Date(c.scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'TBD',
+          isActionable: !!c.gmeet_link
+        }));
+        
+        if (dashboardData.daily_practice) {
+          const pct = Math.min(100, Math.round((dashboardData.daily_practice.today_minutes / dashboardData.daily_practice.goal_minutes) * 100)) || 0;
+          dailyGoal = {
+            minutes: dashboardData.daily_practice.today_minutes || 0,
+            target: dashboardData.daily_practice.goal_minutes || 60,
+            progress_pct: pct
+          };
+        }
+      }
     } catch {
       inProgressCourses = []; // Not yet available — show empty state
     } finally {
@@ -106,11 +131,14 @@
     <div class="sessions-card">
       <h3>Upcoming Live Sessions</h3>
       <div class="sessions-list">
+        {#if upcomingSessions.length === 0}
+          <div style="padding: 20px 0; color: #999; font-size: 0.9rem;">No upcoming live sessions.</div>
+        {/if}
         {#each upcomingSessions as session}
           <div class="session-row">
             <div class="date-badge">
-              <span class="day">{session.date.split(' ')[0]}</span>
-              <span class="month">{session.date.split(' ')[1]}</span>
+              <span class="day">{session.date.split(' ')[1] || '-'}</span>
+              <span class="month">{session.date.split(' ')[0] || '-'}</span>
             </div>
             <div class="session-info">
               <h4>{session.title}</h4>
@@ -130,12 +158,18 @@
     <div class="goal-card">
       <div class="card-header">
         <h3>Daily Goal</h3>
-        <span class="goal-value">0 <span class="muted">/ 60 mins</span></span>
+        <span class="goal-value">{dailyGoal.minutes} <span class="muted">/ {dailyGoal.target} mins</span></span>
       </div>
       <div class="bar-bg">
-        <div class="bar-fill" style="width: 0%"></div>
+        <div class="bar-fill" style="width: {dailyGoal.progress_pct}%"></div>
       </div>
-      <p class="goal-message">"Practice makes progress. You're almost at your goal for today!"</p>
+      <p class="goal-message">
+        {#if dailyGoal.progress_pct >= 100}
+          "Goal achieved! Amazing work today."
+        {:else}
+          "Practice makes progress. You're almost at your goal for today!"
+        {/if}
+      </p>
     </div>
   </div>
   {/if}

@@ -32,6 +32,13 @@
   let classes = $state<TeachingClass[]>([]);
   let isLoading = $state(true);
   let errorMsg = $state('');
+  
+  // Stats State
+  let stats = $state({
+    total_classes: 0,
+    avg_rating: 0.0,
+    total_hours: 0
+  });
 
   // Scheduling State
   let showScheduleModal = $state(false);
@@ -62,8 +69,19 @@
 
   onMount(async () => {
     try {
-      const data = await apiGet<ApiClass[]>('/mentor/classes');
-      classes = (data || []).map(mapApiClass);
+      const [classesData, statsData] = await Promise.all([
+        apiGet<ApiClass[]>('/mentor/classes').catch(() => []),
+        apiGet<any>('/mentor/stats').catch(() => null)
+      ]);
+      classes = (classesData || []).map(mapApiClass);
+      
+      if (statsData) {
+        stats = {
+          total_classes: statsData.total_classes || 0,
+          avg_rating: statsData.avg_rating || 0.0,
+          total_hours: statsData.total_hours || 0
+        };
+      }
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : 'Failed to load classes';
     } finally {
@@ -215,23 +233,23 @@
       <div class="stat-icon red-bg"><Icon name="calendar" size={20} /></div>
       <div class="stat-info">
         <span class="label">Total Classes</span>
-        <div class="value">28</div>
+        <div class="value">{stats.total_classes}</div>
       </div>
     </div>
 
-    <div class="summary-card">
+    <div class="summary-card stat-card">
       <div class="stat-icon yellow-bg"><Icon name="star" size={20} /></div>
       <div class="stat-info">
         <span class="label">Avg. Rating</span>
-        <div class="value">4.8</div>
+        <div class="value">{stats.avg_rating}</div>
       </div>
     </div>
 
-    <div class="summary-card">
+    <div class="summary-card stat-card">
       <div class="stat-icon purple-bg"><Icon name="clock" size={20} /></div>
       <div class="stat-info">
         <span class="trend">TOTAL HOURS</span>
-        <div class="value">148</div>
+        <div class="value">{stats.total_hours}</div>
         <span class="label">Teaching Hours</span>
       </div>
     </div>
