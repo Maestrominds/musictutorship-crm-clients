@@ -59,8 +59,8 @@
           name: u.name,
           email: u.email,
           mentor_name: u.mentor_name,
-          course_id: u.course_id,
-          course_name: u.course_name
+          course_id: u.course_id || null,
+          course_name: u.course_name || u.course_title || ''
         }));
       }
     } catch {
@@ -209,7 +209,7 @@
   {:else}
     <div class="filter-card">
       <div class="search-box">
-        <Icon name="search" size={16} color="#718096" />
+        <Icon name="search" size={16} />
         <input type="text" placeholder="Search by name or email..." bind:value={searchQuery} />
       </div>
     </div>

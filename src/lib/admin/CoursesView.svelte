@@ -9,6 +9,7 @@
   let mentorsList = $state<Mentor[]>([]);
   let isLoading = $state(true);
   let isSubmitting = $state(false);
+  void isSubmitting;
 
   function formatPrice(val: any): string {
     if (!val) return '0.00';
@@ -248,7 +249,7 @@
 
   {#if isLoading}
     <div class="courses-grid">
-      <SkeletonLoader type="card" rows={1} cols={4} />
+      <SkeletonLoader type="cards" rows={1} cols={4} />
     </div>
   {:else}
     <div class="courses-grid">

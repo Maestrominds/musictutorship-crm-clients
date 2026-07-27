@@ -77,9 +77,9 @@
       
       if (statsData) {
         stats = {
-          total_classes: statsData.total_classes || 0,
-          avg_rating: statsData.avg_rating || 0.0,
-          total_hours: statsData.total_hours || 0
+          total_classes: statsData.completed_classes ?? statsData.total_classes ?? 0,
+          avg_rating: statsData.assigned_students ?? statsData.avg_rating ?? 0.0,
+          total_hours: statsData.upcoming_classes ?? statsData.total_hours ?? 0
         };
       }
     } catch (err) {
