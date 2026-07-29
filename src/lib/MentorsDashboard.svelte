@@ -95,10 +95,6 @@
       </div>
 
       <div class="user-profile">
-        <button class="notification-btn">
-          <Icon name="bell" size={18} />
-          <span class="badge"></span>
-        </button>
         <div class="profile-details">
           <span class="user-name">{userName}</span>
           <span class="user-role">Senior Mentor</span>

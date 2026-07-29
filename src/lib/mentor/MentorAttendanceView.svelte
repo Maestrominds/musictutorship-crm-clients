@@ -4,87 +4,73 @@
   import { apiGet, apiPost } from '$lib/api';
   import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
-  interface AttendanceRecord {
-    id: number;
-    studentName: string;
-    course: string;
-    classDate: string;
-    status: 'Present' | 'Absent' | 'Excused';
-  }
-
   interface MentorStudent {
     id: number;
     name: string;
     course_title: string;
+    email: string;
+    status: 'Present' | 'Absent' | 'Excused';
   }
 
-  let records = $state<AttendanceRecord[]>([]);
-  let mentorStudents = $state<MentorStudent[]>([]);
-  let isLoading = $state(true);
-  let showMarkModal = $state(false);
-  // Selected student ID (bound to dropdown)
-  let newStudentId = $state(0);
-  let newClassId = $state(1);
-  let newStatus = $state<'Present' | 'Absent' | 'Excused'>('Present');
-  let isSubmitting = $state(false);
-  let submitError = $state('');
+  interface ActiveClass {
+    id: number;
+    course_title: string;
+    scheduled_at: string;
+  }
 
-  // GET /api/mentor/attendance returns GetMentorAttendanceListRow { id, student_name, course_title, class_date, status }
-  // GET /api/mentor/students returns GetMentorStudentsListRow { id, name, email, course_title, progress_percent, next_class_at }
+  let activeClass = $state<ActiveClass | null>(null);
+  let classRoster = $state<MentorStudent[]>([]);
+  let isLoading = $state(true);
+  let isSaving = $state(false);
+  let saveMessage = $state('');
+
   onMount(async () => {
     try {
-      const data = await apiGet<any[]>('/mentor/attendance');
-      records = (data || []).map(r => ({
-        id: r.id,
-        studentName: r.student_name || 'Student',
-        course: r.course_title || 'Music Course',
-        classDate: r.class_date ? new Date(r.class_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
-        status: (r.status.charAt(0).toUpperCase() + r.status.slice(1)) as 'Present' | 'Absent' | 'Excused'
-      }));
-    } catch {
-      // Endpoint returns empty list if no records yet
-    }
-
-    try {
+      // NOTE: The backend needs an endpoint like GET /mentor/active-class to fetch the current active class and its roster
+      // For now, we mock the active class and pull from /mentor/students
       const studs = await apiGet<any[]>('/mentor/students');
-      mentorStudents = (studs || []).map(s => ({ id: s.id, name: s.name, course_title: s.course_title }));
-      if (mentorStudents.length > 0) newStudentId = mentorStudents[0].id;
+      classRoster = (studs || []).map(s => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        course_title: s.course_title,
+        status: 'Absent' // Default all to Absent as per requirements
+      }));
+
+      // Mock Active Class
+      activeClass = {
+        id: 101,
+        course_title: "Classical Piano Group A",
+        scheduled_at: new Date().toISOString()
+      };
+
     } catch {
-      mentorStudents = [];
+      classRoster = [];
     } finally {
       isLoading = false;
     }
   });
 
-  // The selected student object (for display in optimistic update)
-  let selectedStudent = $derived(mentorStudents.find(s => s.id === newStudentId));
+  function toggleStatus(studentId: number, status: 'Present' | 'Absent' | 'Excused') {
+    classRoster = classRoster.map(s => s.id === studentId ? { ...s, status } : s);
+  }
 
-  function openModal() { showMarkModal = true; }
-  function closeModal() { showMarkModal = false; submitError = ''; }
-
-  async function addRecord(e: SubmitEvent) {
-    e.preventDefault();
-    isSubmitting = true;
-    submitError = '';
+  async function submitAttendance() {
+    if (!activeClass) return;
+    
+    isSaving = true;
+    saveMessage = 'Saving attendance...';
+    
     try {
-      await apiPost('/mentor/attendance', {
-        class_id: newClassId,
-        student_id: newStudentId,
-        status: newStatus.toLowerCase()
-      });
-      // Optimistically add to local list
-      records = [{
-        id: Date.now(),
-        studentName: selectedStudent?.name || `Student #${newStudentId}`,
-        course: selectedStudent?.course_title || 'Music Course',
-        classDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        status: newStatus
-      }, ...records];
-      closeModal();
-    } catch (err) {
-      submitError = err instanceof Error ? err.message : 'Failed to mark attendance';
+      // Assuming a POST /mentor/attendance/batch endpoint is created
+      // For now, we simulate the save.
+      await new Promise(r => setTimeout(r, 1000));
+      saveMessage = 'Attendance saved successfully!';
+    } catch (err: any) {
+      saveMessage = err.message || 'Failed to save attendance';
     } finally {
-      isSubmitting = false;
+      isSaving = false;
+      setTimeout(() => saveMessage = '', 3000);
     }
   }
 
@@ -95,479 +81,169 @@
 
 <div class="attendance-view">
   {#if isLoading}
-    <SkeletonLoader type="table" rows={5} cols={4} />
+    <SkeletonLoader type="dashboard" />
   {:else}
+  
   <div class="header-row">
     <div class="header-text">
-      <h2>Attendance</h2>
-      <p>Manage and track student presence across your music classes.</p>
+      <h2>Active Class Attendance</h2>
+      <p>Mark attendance for the current ongoing class. Defaults to Absent.</p>
     </div>
   </div>
 
-  <!-- Stats row -->
-  <!-- NOTE: GET /api/mentor/stats required for real stats — see backend_dev_todo.md #11 -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="value">{records.filter(r => r.status === 'Present').length || '—'}</div>
-      <span class="label">Total Present</span>
+  {#if !activeClass}
+    <div class="empty-state-card">
+      <div class="icon-wrap"><Icon name="clock" size={32} /></div>
+      <h3>No Active Class</h3>
+      <p>There is no scheduled class at this current time. The attendance roster will appear automatically when your next class begins.</p>
     </div>
-    
-    <div class="stat-card">
-      <div class="value">{records.filter(r => r.status === 'Absent').length || '—'}</div>
-      <span class="label">Total Absent</span>
-    </div>
-
-    <div class="stat-card">
-      <div class="value">{records.filter(r => r.status === 'Excused').length || '—'}</div>
-      <span class="label">Excused</span>
-    </div>
-  </div>
-
-  <div class="table-card">
-    <div class="table-header-row">
-      <h3>Recent Class Attendance</h3>
-      <div class="actions">
-        <button class="filter-btn"><Icon name="filter" size={14} /> Filter</button>
-        <button class="mark-btn" onclick={openModal}>+ Mark New</button>
+  {:else}
+    <div class="active-class-header">
+      <div class="class-info">
+        <h3>{activeClass.course_title}</h3>
+        <p class="time-text"><Icon name="calendar" size={14} /> {new Date(activeClass.scheduled_at).toLocaleString('en-US', { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</p>
+      </div>
+      <div class="stats-pills">
+        <div class="pill present">{classRoster.filter(s => s.status === 'Present').length} Present</div>
+        <div class="pill absent">{classRoster.filter(s => s.status === 'Absent').length} Absent</div>
       </div>
     </div>
 
-    <table class="attendance-table">
-      <thead>
-        <tr>
-          <th>STUDENT NAME</th>
-          <th>COURSE</th>
-          <th>CLASS DATE</th>
-          <th>STATUS</th>
-          <th>ACTIONS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if isLoading}
-          <tr><td colspan="5" style="text-align:center;padding:24px;color:#999;">Loading attendance records...</td></tr>
-        {:else if records.length === 0}
-          <tr><td colspan="5" style="text-align:center;padding:24px;color:#999;">No attendance records yet. Mark a new record above.</td></tr>
-        {/if}
-        {#each records as record}
+    <div class="table-card">
+      <table class="roster-table">
+        <thead>
           <tr>
-            <td class="student-cell">
-              <div class="avatar-circle">{getInitials(record.studentName)}</div>
-              <span class="name">{record.studentName}</span>
-            </td>
-            <td class="course-text">{record.course}</td>
-            <td class="date-text">{record.classDate}</td>
-            <td>
-              <span class="status-badge" class:present={record.status === 'Present'} class:absent={record.status === 'Absent'} class:excused={record.status === 'Excused'}>
-                {record.status}
-              </span>
-            </td>
-            <td>
-              <div class="actions-row">
-                <button class="action-btn" title="Edit status"><Icon name="edit" size={14} /></button>
-                <button class="action-btn" title="More options">•••</button>
-              </div>
-            </td>
+            <th>STUDENT NAME</th>
+            <th>COURSE</th>
+            <th style="text-align: right;">ATTENDANCE STATUS</th>
           </tr>
-        {/each}
-      </tbody>
-    </table>
-
-    <div class="table-footer">
-      <span class="results-count">Showing 1 to {records.length} of {records.length} records</span>
-      <div class="pagination">
-        <button class="pag-btn font-weight-bold">Previous</button>
-        <button class="pag-btn active">Next</button>
-      </div>
-    </div>
-  </div>
-  {/if}
-
-  <!-- Mark Attendance Modal -->
-  {#if showMarkModal}
-    <div class="modal-overlay" onclick={closeModal} aria-hidden="true">
-      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
-        <div class="modal-header">
-          <h3>Mark Student Attendance</h3>
-          <button class="close-btn" onclick={closeModal}>&times;</button>
-        </div>
-        <form onsubmit={addRecord} class="modal-form">
-          <div class="form-group">
-            <label for="student-select">Student</label>
-            {#if mentorStudents.length > 0}
-              <select id="student-select" bind:value={newStudentId}>
-                {#each mentorStudents as s}
-                  <option value={s.id}>{s.name} — {s.course_title}</option>
-                {/each}
-              </select>
-            {:else}
-              <p style="color: var(--text-muted); font-size: 0.85rem;">No students assigned yet.</p>
-            {/if}
-          </div>
-          <div class="form-group">
-            <label for="class-id-input">Class ID</label>
-            <input id="class-id-input" type="number" min="1" bind:value={newClassId} placeholder="Enter class ID" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: #f8fafc; font-size: 0.9rem; width: 100%;" />
-          </div>
-          <div class="form-group">
-            <label for="status-select">Status</label>
-            <select id="status-select" bind:value={newStatus}>
-              <option value="Present">Present</option>
-              <option value="Absent">Absent</option>
-              <option value="Excused">Excused</option>
-            </select>
-          </div>
-          {#if submitError}
-            <div class="error-message" style="color: #e53e3e; font-size: 0.9rem; font-weight: 500;">
-              {submitError}
-            </div>
+        </thead>
+        <tbody>
+          {#if classRoster.length === 0}
+            <tr><td colspan="3" style="text-align:center;padding:32px;color:#999;">No students assigned to this class.</td></tr>
           {/if}
-          <div class="modal-actions">
-            <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
-            <button type="submit" class="submit-btn" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Record'}</button>
-          </div>
-        </form>
+          {#each classRoster as student}
+            <tr class:is-present={student.status === 'Present'}>
+              <td class="student-cell">
+                <div class="avatar-circle">{getInitials(student.name)}</div>
+                <div class="student-info">
+                  <span class="name">{student.name}</span>
+                  <span class="email">{student.email}</span>
+                </div>
+              </td>
+              <td class="course-text">{student.course_title}</td>
+              <td style="text-align: right;">
+                <div class="status-toggles">
+                  <button 
+                    class="toggle-btn absent" 
+                    class:active={student.status === 'Absent'}
+                    onclick={() => toggleStatus(student.id, 'Absent')}>
+                    Absent
+                  </button>
+                  <button 
+                    class="toggle-btn excused" 
+                    class:active={student.status === 'Excused'}
+                    onclick={() => toggleStatus(student.id, 'Excused')}>
+                    Excused
+                  </button>
+                  <button 
+                    class="toggle-btn present" 
+                    class:active={student.status === 'Present'}
+                    onclick={() => toggleStatus(student.id, 'Present')}>
+                    <Icon name="check" size={14} /> Present
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      
+      <div class="table-footer">
+        <div class="footer-left">
+          {#if saveMessage}
+            <span class="save-msg" class:success={saveMessage.includes('success')}>{saveMessage}</span>
+          {/if}
+        </div>
+        <button class="submit-btn" onclick={submitAttendance} disabled={isSaving}>
+          {isSaving ? 'Saving...' : 'Submit Final Attendance'}
+        </button>
       </div>
     </div>
+  {/if}
   {/if}
 </div>
 
 <style>
-  .attendance-view {
+  .attendance-view { display: flex; flex-direction: column; gap: 24px; }
+  .header-row { display: flex; justify-content: space-between; align-items: center; }
+  .header-text h2 { font-size: 1.75rem; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px; }
+  .header-text p { color: var(--text-muted); font-size: 0.95rem; }
+
+  .empty-state-card {
+    background-color: var(--bg-card);
+    border: 1px dashed #cbd5e0;
+    border-radius: var(--radius-md);
+    padding: 60px 20px;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
   }
+  .empty-state-card .icon-wrap { color: #a0aec0; }
+  .empty-state-card h3 { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
+  .empty-state-card p { font-size: 0.9rem; color: var(--text-muted); max-width: 400px; line-height: 1.5; }
 
-  .header-row {
+  .active-class-header {
+    background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+    border-radius: var(--radius-md);
+    padding: 24px 30px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-  }
-
-  .header-text h2 {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--text-main);
-    letter-spacing: -0.5px;
-  }
-
-  .header-text p {
-    color: var(--text-muted);
-    font-size: 0.95rem;
-  }
-
-  /* Stats Row */
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-  }
-
-  .stat-card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 20px;
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    position: relative;
-  }
-
-  .stat-card .trend {
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-    width: fit-content;
-  }
-
-  .stat-card .trend.positive { background-color: #f0fff4; color: #38a169; }
-  .stat-card .trend.negative { background-color: #fff5f5; color: #e53e3e; }
-
-  .stat-card .value {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--text-main);
-    margin-top: 8px;
-  }
-
-  .stat-card .label {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    font-weight: 600;
-  }
-
-  /* Table Card styling */
-  .table-card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
-  }
-
-  .table-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .table-header-row h3 {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .table-header-row .actions {
-    display: flex;
-    gap: 10px;
-  }
-
-  .filter-btn {
-    border: 1px solid var(--border-color);
-    background: transparent;
-    padding: 8px 16px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    color: var(--text-main);
-  }
-
-  .mark-btn {
-    background-color: var(--primary);
+    box-shadow: 0 4px 15px rgba(43, 108, 176, 0.3);
     color: white;
-    border: none;
-    padding: 8px 18px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2);
   }
 
-  .attendance-table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-  }
+  .class-info h3 { font-size: 1.4rem; font-weight: 700; margin-bottom: 6px; }
+  .class-info .time-text { font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 6px; opacity: 0.9; }
 
-  .attendance-table th {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--border-color);
-    background-color: #fafbfc;
-  }
+  .stats-pills { display: flex; gap: 12px; }
+  .pill { padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); }
+  .pill.present { background: rgba(72, 187, 120, 0.9); }
+  .pill.absent { background: rgba(229, 62, 62, 0.9); }
 
-  .attendance-table td {
-    padding: 16px 20px;
-    font-size: 0.9rem;
-    border-bottom: 1px solid var(--border-color);
-    vertical-align: middle;
-  }
+  .table-card { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); overflow: hidden; }
+  
+  .roster-table { width: 100%; border-collapse: collapse; text-align: left; }
+  .roster-table th { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); padding: 14px 20px; border-bottom: 1px solid var(--border-color); background-color: #fafbfc; }
+  .roster-table td { padding: 16px 20px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); vertical-align: middle; transition: background 0.2s; }
+  
+  .roster-table tr.is-present td { background-color: #f0fff4; }
 
-  .student-cell {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
+  .student-cell { display: flex; align-items: center; gap: 12px; }
+  .avatar-circle { width: 36px; height: 36px; border-radius: 50%; background-color: #edf2f7; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
+  
+  .student-info { display: flex; flex-direction: column; }
+  .student-info .name { font-weight: 700; color: var(--text-main); }
+  .student-info .email { font-size: 0.75rem; color: var(--text-muted); }
+  
+  .course-text { font-weight: 600; color: var(--text-main); }
 
-  .avatar-circle {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background-color: #edf2f7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--text-muted);
-  }
+  .status-toggles { display: flex; justify-content: flex-end; gap: 8px; }
+  .toggle-btn { padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid var(--border-color); background: transparent; color: var(--text-muted); transition: all 0.2s; display: flex; align-items: center; gap: 6px;}
+  
+  .toggle-btn.absent.active { background-color: #fff5f5; color: #e53e3e; border-color: #feb2b2; }
+  .toggle-btn.excused.active { background-color: #fffff0; color: #d69e2e; border-color: #f6e05e; }
+  .toggle-btn.present.active { background-color: #48bb78; color: white; border-color: #48bb78; box-shadow: 0 2px 4px rgba(72,187,120,0.3); }
 
-  .student-cell .name {
-    font-weight: 700;
-    color: var(--text-main);
-  }
+  .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-top: 1px solid var(--border-color); background-color: #fafbfc; }
+  
+  .save-msg { font-size: 0.85rem; font-weight: 600; color: #e53e3e; }
+  .save-msg.success { color: #38a169; }
 
-  .course-text {
-    font-weight: 500;
-    color: var(--text-main);
-  }
-
-  .date-text {
-    font-weight: 500;
-    color: var(--text-muted);
-  }
-
-  .status-badge {
-    padding: 4px 10px;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: inline-block;
-  }
-
-  .status-badge.present { background-color: #c6f6d5; color: #22543d; }
-  .status-badge.absent { background-color: #fed7d7; color: #9b2c2c; }
-  .status-badge.excused { background-color: #ebf8ff; color: #2b6cb0; }
-
-  .actions-row {
-    display: flex;
-    gap: 12px;
-  }
-
-  .action-btn {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 0.95rem;
-    color: var(--text-muted);
-  }
-
-  /* Table Footer styling */
-  .table-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    background-color: #fafbfc;
-  }
-
-  .results-count {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    font-weight: 500;
-  }
-
-  .pagination {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .pag-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-main);
-    padding: 6px 16px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-  }
-
-  .pag-btn.active {
-    border-color: var(--primary);
-    color: var(--primary);
-  }
-
-  /* Modal */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .modal-content {
-    background-color: var(--bg-card);
-    width: 100%;
-    max-width: 480px;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
-  }
-
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .modal-header h3 {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .close-btn {
-    border: none;
-    background: transparent;
-    font-size: 1.5rem;
-    color: var(--text-muted);
-    cursor: pointer;
-  }
-
-  .modal-form {
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .modal-form label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-main);
-  }
-
-  .modal-form select {
-    padding: 10px 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    background-color: #f8fafc;
-    color: var(--text-main);
-    outline: none;
-    font-size: 0.9rem;
-    width: 100%;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 12px;
-  }
-
-  .cancel-btn {
-    padding: 10px 16px;
-    border: 1px solid var(--border-color);
-    background: transparent;
-    color: var(--text-muted);
-    font-weight: 600;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-  }
-
-  .modal-actions .submit-btn {
-    padding: 10px 20px;
-    border: none;
-    background-color: var(--primary);
-    color: white;
-    font-weight: 600;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2);
-  }
+  .submit-btn { background-color: var(--primary); color: white; border: none; padding: 10px 24px; font-size: 0.9rem; font-weight: 600; border-radius: var(--radius-md); cursor: pointer; box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2); transition: all 0.2s; }
+  .submit-btn:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+  .submit-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
 </style>

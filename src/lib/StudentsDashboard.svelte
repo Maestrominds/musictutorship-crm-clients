@@ -6,11 +6,12 @@
   import StudentScheduleView from './student/StudentScheduleView.svelte';
   import StudentPaymentsView from './student/StudentPaymentsView.svelte';
   import StudentSupportView from './student/StudentSupportView.svelte';
+  import StudentProfileView from './student/StudentProfileView.svelte';
   import SkeletonLoader from './SkeletonLoader.svelte';
 
   let { data } = $props<{ data: any }>();
 
-  let activeSubView = $state<'dashboard' | 'courses' | 'schedule' | 'payments' | 'support'>(
+  let activeSubView = $state<'dashboard' | 'schedule' | 'payments' | 'support' | 'profile'>(
     (typeof window !== 'undefined' ? localStorage.getItem('studentActiveSubView') as any : null) || 'dashboard'
   );
   let isPageTransitioning = $state(false);
@@ -61,9 +62,7 @@
       <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => navigateTo('dashboard')}>
         <span class="nav-icon"><Icon name="dashboard" size={16} /></span> My Dashboard
       </button>
-      <button class="nav-item" class:active={activeSubView === 'courses'} onclick={() => navigateTo('courses')}>
-        <span class="nav-icon"><Icon name="book" size={16} /></span> My Courses
-      </button>
+
       <button class="nav-item" class:active={activeSubView === 'schedule'} onclick={() => navigateTo('schedule')}>
         <span class="nav-icon"><Icon name="calendar" size={16} /></span> Class Schedule
       </button>
@@ -73,7 +72,9 @@
       <button class="nav-item" class:active={activeSubView === 'support'} onclick={() => navigateTo('support')}>
         <span class="nav-icon"><Icon name="message-square" size={16} /></span> Support Tickets
       </button>
-      <button class="nav-item"><span class="nav-icon"><Icon name="user" size={16} /></span> Profile</button>
+      <button class="nav-item" class:active={activeSubView === 'profile'} onclick={() => navigateTo('profile')}>
+        <span class="nav-icon"><Icon name="user" size={16} /></span> Profile
+      </button>
     </nav>
 
     <div class="sidebar-footer">
@@ -92,10 +93,6 @@
       </div>
 
       <div class="user-profile">
-        <button class="notification-btn">
-          <Icon name="bell" size={18} />
-          <span class="badge"></span>
-        </button>
         <div class="profile-details">
           <span class="user-name">{userName}</span>
           <span class="user-role">Student</span>
@@ -112,14 +109,14 @@
         <SkeletonLoader type="table" rows={5} cols={4} />
       {:else if activeSubView === 'dashboard'}
         <StudentDashboardView dashboardData={data?.dashboardData} />
-      {:else if activeSubView === 'courses'}
-        <StudentCoursesView />
       {:else if activeSubView === 'schedule'}
         <StudentScheduleView dashboardData={data?.dashboardData} />
       {:else if activeSubView === 'payments'}
         <StudentPaymentsView />
       {:else if activeSubView === 'support'}
         <StudentSupportView />
+      {:else if activeSubView === 'profile'}
+        <StudentProfileView />
       {/if}
     </div>
   </main>

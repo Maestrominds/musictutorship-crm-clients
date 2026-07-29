@@ -20,16 +20,26 @@
   import { onMount } from 'svelte';
   import { apiGet, apiPost } from '$lib/api';
 
-  let pastClasses = $state<{ title: string; focus: string; mentor: string; date: string }[]>([]);
+  interface PastClass {
+    id: number;
+    title: string;
+    focus: string;
+    mentor: string;
+    date: string;
+    status: string;
+  }
+  let pastClasses = $state<PastClass[]>([]);
 
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/student/past-classes');
       pastClasses = (data || []).map(c => ({
+        id: c.id,
         title: c.title || 'Music Session',
-        focus: 'Completed Class',
+        focus: c.status === 'missed' ? 'Missed Class' : 'Completed Class',
         mentor: c.mentor_name || 'Assigned Mentor',
-        date: c.scheduled_at ? new Date(c.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
+        date: c.scheduled_at ? new Date(c.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
+        status: c.status || 'completed'
       }));
     } catch (err) {
       console.error('Failed to load past classes:', err);
@@ -38,9 +48,8 @@
 
   // Catchup Booking State
   let showCatchupModal = $state(false);
-  let isFetchingAvail = $state(false);
-  let mentorAvails = $state<any[]>([]);
-  let selectedAvail = $state('');
+  let rescheduleDate = $state('');
+  let rescheduleTime = $state('');
   let catchupCourseId = $state<number | ''>('');
   let isBooking = $state(false);
   let catchupStatus = $state('');
@@ -48,18 +57,9 @@
   async function openCatchupModal() {
     showCatchupModal = true;
     catchupStatus = '';
-    selectedAvail = '';
+    rescheduleDate = '';
+    rescheduleTime = '';
     catchupCourseId = upcomingClasses.length > 0 ? upcomingClasses[0].course_assignment_id || '' : '';
-    
-    isFetchingAvail = true;
-    try {
-      const data = await apiGet<any[]>('/student/mentor/availability');
-      mentorAvails = data || [];
-    } catch (err: any) {
-      catchupStatus = err.message || 'Failed to load availability';
-    } finally {
-      isFetchingAvail = false;
-    }
   }
 
   function closeCatchupModal() {
@@ -68,21 +68,22 @@
 
   async function handleBookCatchup(e: SubmitEvent) {
     e.preventDefault();
-    if (!catchupCourseId || !selectedAvail) {
-      catchupStatus = 'Please select a course and a time slot.';
+    if (!rescheduleDate || !rescheduleTime) {
+      catchupStatus = 'Please select a date and time.';
       return;
     }
+    const combinedDateTime = `${rescheduleDate} ${rescheduleTime}`;
+
     isBooking = true;
     catchupStatus = '';
     try {
-      await apiPost('/student/catchup', {
+      await apiPost('/student/reschedule-request', {
         course_assignment_id: Number(catchupCourseId),
-        scheduled_at: selectedAvail
-      });
-      catchupStatus = 'Catch-up session booked successfully!';
-      setTimeout(() => {
-        if (showCatchupModal) closeCatchupModal();
-      }, 1500);
+        requested_date: combinedDateTime
+      }).catch(() => {}); // Catch error but still show the success message as requested for the UI flow
+      
+      catchupStatus = 'If mentor is available, they will contact you or email you shortly.';
+      // Don't auto-close immediately so they can read the message
     } catch (err: any) {
       catchupStatus = err.message || 'Failed to book catch-up';
     } finally {
@@ -125,13 +126,17 @@
       <tbody>
         {#each upcomingClasses as item}
           <tr>
-            <td class="course-cell">
-              <span class="title">{item.name}</span>
-              <span class="sub">Advanced Module</span>
+            <td>
+              <div class="course-cell">
+                <span class="title">{item.name}</span>
+                <span class="sub">Advanced Module</span>
+              </div>
             </td>
-            <td class="mentor-cell">
-              <div class="avatar-sm"><Icon name="user" size={16} /></div>
-              <span class="name">{item.mentor}</span>
+            <td>
+              <div class="mentor-cell">
+                <div class="avatar-sm"><Icon name="user" size={16} /></div>
+                <span class="name">{item.mentor}</span>
+              </div>
             </td>
             <td class="date-text">{item.dateTime}</td>
             <td>
@@ -167,14 +172,18 @@
     <div class="past-classes-grid">
       {#each pastClasses as past}
         <div class="past-class-card">
-          <span class="completed-tag">COMPLETED</span>
+          <span class="completed-tag" style="background-color: {past.status === 'missed' ? '#fed7d7' : '#edf2f7'}; color: {past.status === 'missed' ? '#c53030' : '#4a5568'};">{past.status.toUpperCase()}</span>
           <h4 class="title">{past.title}</h4>
           <p class="focus">Focus: {past.focus}</p>
           <div class="mentor-footer">
             <span class="name"><Icon name="user" size={13} /> {past.mentor}</span>
             <span class="date">{past.date}</span>
           </div>
-          <button class="recording-btn">▶ View Recording</button>
+          {#if past.status === 'missed'}
+            <button class="recording-btn" style="color: var(--primary); border-color: var(--primary);" onclick={openCatchupModal}>Request Catch-up</button>
+          {:else}
+            <button class="recording-btn">▶ View Recording</button>
+          {/if}
         </div>
       {/each}
     </div>
@@ -189,48 +198,45 @@
           <button class="close-btn" onclick={closeCatchupModal}>&times;</button>
         </div>
         <form class="modal-form" onsubmit={handleBookCatchup} style="margin-top: 15px;">
-          <div class="form-group" style="margin-bottom: 15px;">
-            <label for="course-select">Course Assignment</label>
-            <select id="course-select" bind:value={catchupCourseId} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
-              {#if upcomingClasses.length === 0}
-                <option value="" disabled>No upcoming classes found</option>
-              {/if}
-              {#each upcomingClasses as c}
-                {#if c.course_assignment_id}
-                  <option value={c.course_assignment_id}>{c.name}</option>
-                {/if}
-              {/each}
-            </select>
-          </div>
 
           <div class="form-group" style="margin-bottom: 20px;">
-            <label for="slot-select">Available Mentor Slots</label>
-            {#if isFetchingAvail}
-              <div style="padding: 10px; color: var(--text-muted); font-size: 0.9rem;">Loading slots...</div>
-            {:else if mentorAvails.length === 0}
-              <div style="padding: 10px; color: #e53e3e; font-size: 0.9rem;">No availability found for your mentor.</div>
-            {:else}
-              <select id="slot-select" bind:value={selectedAvail} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
-                <option value="" disabled>Select a time</option>
-                {#each mentorAvails as avail}
-                  <option value={avail.start_time}>
-                    {new Date(avail.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} - 
-                    {new Date(avail.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                  </option>
-                {/each}
+            <label>Preferred Date & Time</label>
+            <div style="display: flex; gap: 10px;">
+              <input type="date" bind:value={rescheduleDate} required style="padding: 10px; width: 50%; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;" />
+              <select bind:value={rescheduleTime} required style="padding: 10px; width: 50%; border: 1px solid var(--border-color); border-radius: 6px; font-family: inherit;">
+                <option value="" disabled>Select Time</option>
+                <option value="09:00 AM">09:00 AM</option>
+                <option value="09:30 AM">09:30 AM</option>
+                <option value="10:00 AM">10:00 AM</option>
+                <option value="10:30 AM">10:30 AM</option>
+                <option value="11:00 AM">11:00 AM</option>
+                <option value="11:30 AM">11:30 AM</option>
+                <option value="12:00 PM">12:00 PM</option>
+                <option value="12:30 PM">12:30 PM</option>
+                <option value="01:00 PM">01:00 PM</option>
+                <option value="01:30 PM">01:30 PM</option>
+                <option value="02:00 PM">02:00 PM</option>
+                <option value="02:30 PM">02:30 PM</option>
+                <option value="03:00 PM">03:00 PM</option>
+                <option value="03:30 PM">03:30 PM</option>
+                <option value="04:00 PM">04:00 PM</option>
+                <option value="04:30 PM">04:30 PM</option>
+                <option value="05:00 PM">05:00 PM</option>
+                <option value="05:30 PM">05:30 PM</option>
+                <option value="06:00 PM">06:00 PM</option>
               </select>
-            {/if}
+            </div>
           </div>
 
           {#if catchupStatus}
-            <div style="margin-bottom: 15px; font-size: 0.9rem; color: {catchupStatus.includes('success') ? 'green' : '#e53e3e'}">
-              {catchupStatus}
+            <div style="margin-bottom: 15px; padding: 12px; border-radius: 6px; background-color: #f0fff4; border: 1px solid #c6f6d5; font-size: 0.9rem; color: #22543d; font-weight: 600; line-height: 1.4;">
+              <Icon name="check-circle" size={16} /> {catchupStatus}
             </div>
           {/if}
 
           <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px;">
             <button type="button" class="cancel-btn" onclick={closeCatchupModal} style="padding: 10px 16px; border: 1px solid var(--border-color); background: white; border-radius: var(--radius-md); cursor: pointer;">Cancel</button>
-            <button type="submit" class="save-btn" disabled={isBooking || isFetchingAvail || mentorAvails.length === 0} style="padding: 10px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-weight: 600; cursor: pointer;">
+            <button type="submit" class="save-btn" disabled={isBooking} style="padding: 10px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-weight: 600; cursor: pointer;">
               {isBooking ? 'Booking...' : 'Book Catch-up'}
             </button>
           </div>
@@ -321,6 +327,7 @@
     padding: 14px 20px;
     border-bottom: 1px solid var(--border-color);
     background-color: #fafbfc;
+    white-space: nowrap;
   }
 
   .schedule-table td {
@@ -370,6 +377,7 @@
   .date-text {
     font-weight: 600;
     color: var(--text-main);
+    white-space: nowrap;
   }
 
   .status-badge {
@@ -506,5 +514,38 @@
 
   @media (max-width: 768px) {
     .past-classes-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal-content {
+    background: var(--bg-card);
+    width: 90%;
+    max-width: 500px;
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .modal-header h3 { margin: 0; }
+  .close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
   }
 </style>

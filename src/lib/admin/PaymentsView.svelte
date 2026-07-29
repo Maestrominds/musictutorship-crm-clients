@@ -10,6 +10,7 @@
     name: string;
     course: string;
     amount: string;
+    rawAmount: number;
     paymentDate: string;
     status: string;
   }
@@ -26,8 +27,9 @@
         name: p.student_name || 'Student',
         course: p.course_title || 'Course Tuition',
         amount: `$${p.amount}`,
+        rawAmount: Number(p.amount) || 0,
         paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
-        status: p.status || 'paid'
+        status: (p.status || 'paid').toLowerCase()
       }));
     } catch {
       payments = []; // Not yet available — show empty state
@@ -50,7 +52,8 @@
   }
 
   async function updateStatus(id: number, currentStatus: string) {
-    const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+    if (currentStatus === 'paid') return;
+    const newStatus = 'paid'; // only move from pending to paid
     payments = payments.map(p => p.id === id ? { ...p, status: newStatus } : p);
     try {
       await apiFetch(`/admin/payments/${id}/status`, {
@@ -61,6 +64,18 @@
       console.warn('Failed to update status, reverting...', err);
       payments = payments.map(p => p.id === id ? { ...p, status: currentStatus } : p);
       alert('Failed to update payment status: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+
+  async function updateAmount(id: number, newAmount: number) {
+    try {
+      await apiFetch(`/admin/payments/${id}/amount`, {
+        method: 'PATCH',
+        body: JSON.stringify({ amount: newAmount })
+      });
+      payments = payments.map(p => p.id === id ? { ...p, amount: `$${newAmount}` } : p);
+    } catch (err) {
+      alert('Failed to update payment amount: ' + (err instanceof Error ? err.message : String(err)));
     }
   }
 </script>
@@ -133,7 +148,19 @@
               </td>
               <td>
                 <div class="amount-cell-inner">
-                  <div class="amount-val">{transaction.amount}</div>
+                  {#if transaction.status === 'paid'}
+                    <div class="amount-val">{transaction.amount}</div>
+                  {:else}
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="font-weight: 700; color: var(--text-main);">$</span>
+                      <input 
+                        type="number" 
+                        bind:value={transaction.rawAmount} 
+                        onblur={() => updateAmount(transaction.id, transaction.rawAmount)}
+                        style="width: 80px; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-weight: 700; color: var(--text-main);"
+                      />
+                    </div>
+                  {/if}
                   <div class="course-sub">{transaction.course}</div>
                 </div>
               </td>
@@ -141,7 +168,8 @@
               <td>
                 <button 
                   onclick={() => updateStatus(transaction.id, transaction.status)}
-                  style="border: none; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; cursor: pointer; background-color: {transaction.status === 'paid' ? '#c6f6d5' : '#feebc8'}; color: {transaction.status === 'paid' ? '#22543d' : '#744210'}; text-transform: uppercase;">
+                  disabled={transaction.status === 'paid'}
+                  style="border: none; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; cursor: {transaction.status === 'paid' ? 'default' : 'pointer'}; background-color: {transaction.status === 'paid' ? '#c6f6d5' : '#feebc8'}; color: {transaction.status === 'paid' ? '#22543d' : '#744210'}; text-transform: uppercase;">
                   {transaction.status}
                 </button>
               </td>

@@ -300,6 +300,9 @@
                 <option value={course.id}>{course.name}</option>
               {/each}
             </select>
+            <span style="font-size: 0.75rem; color: #718096; margin-top: 2px; display: flex; align-items: center; gap: 4px;">
+              <Icon name="info" size={12} /> Note: Mentors are assigned automatically based on the course they teach.
+            </span>
           </div>
           <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
             <button type="button" class="cancel-btn" onclick={closeEditModal} style="padding: 8px 16px; border: 1px solid #cbd5e0; border-radius: 4px; background: white; cursor: pointer;">Cancel</button>
@@ -441,6 +444,7 @@
     padding: 14px 20px;
     border-bottom: 1px solid var(--border-color);
     background-color: #fafbfc;
+    white-space: nowrap;
   }
 
   .students-table td {
@@ -448,6 +452,7 @@
     font-size: 0.9rem;
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
+    white-space: nowrap;
   }
 
   .user-cell {

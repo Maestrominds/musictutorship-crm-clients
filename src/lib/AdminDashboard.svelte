@@ -132,11 +132,6 @@
       <button class="nav-item" class:active={activeSubView === 'payments'} onclick={() => navigateTo('payments')}><span class="nav-icon"><Icon name="credit-card" size={16} /></span> Payments</button>
       <button class="nav-item" class:active={activeSubView === 'mentors'} onclick={() => navigateTo('mentors')}><span class="nav-icon"><Icon name="music" size={16} /></span> Mentors</button>
       <button class="nav-item" class:active={activeSubView === 'tickets'} onclick={() => navigateTo('tickets')}><span class="nav-icon"><Icon name="message-square" size={16} /></span> Tickets</button>
-
-      <div class="nav-section-title">ADVANCED</div>
-      <button class="nav-item"><span class="nav-icon"><Icon name="activity" size={16} /></span> Automation</button>
-      <button class="nav-item"><span class="nav-icon"><Icon name="chart" size={16} /></span> Analytics</button>
-      <button class="nav-item"><span class="nav-icon"><Icon name="settings" size={16} /></span> Settings</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -156,10 +151,6 @@
       </div>
       
       <div class="user-profile">
-        <button class="notification-btn">
-          <Icon name="bell" size={18} />
-          <span class="badge"></span>
-        </button>
         <div class="profile-details">
           <span class="user-name">{userName}</span>
           <span class="user-role">Admin</span>

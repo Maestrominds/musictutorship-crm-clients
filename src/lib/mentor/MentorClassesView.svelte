@@ -12,24 +12,26 @@
     gmeet_link: string | null;
     created_at: string;
     course_title?: string;
-    student_name?: string;
-    student_id?: number;
   }
 
-  interface TeachingClass {
+  interface ScheduledClass {
     id: number;
-    studentName: string;
-    studentId: string;
     course: string;
     courseLevel: string;
     dateTime: string;
-    meetingType: 'Join' | 'JoinActive' | 'Recording';
-    meetingLink: string;
     status: 'Upcoming' | 'In Progress' | 'Completed';
-    hasFeedback: boolean;
   }
 
-  let classes = $state<TeachingClass[]>([]);
+  interface RescheduleRequest {
+    id: number;
+    studentName: string;
+    studentEmail: string;
+    course: string;
+    requestedDateTime: string;
+  }
+
+  let scheduledClasses = $state<ScheduledClass[]>([]);
+  let rescheduleRequests = $state<RescheduleRequest[]>([]);
   let isLoading = $state(true);
   let errorMsg = $state('');
   
@@ -40,14 +42,7 @@
     total_hours: 0
   });
 
-  // Scheduling State
-  let showScheduleModal = $state(false);
-  let scheduleClassId = $state(0);
-  let scheduleStudentEmail = $state('');
-  let isScheduling = $state(false);
-  let scheduleError = $state('');
-
-  function mapApiClass(c: ApiClass): TeachingClass {
+  function mapApiClass(c: ApiClass): ScheduledClass {
     const scheduledDate = new Date(c.scheduled_at);
     const now = new Date();
     let status: 'Upcoming' | 'In Progress' | 'Completed' = 'Upcoming';
@@ -55,15 +50,10 @@
 
     return {
       id: c.id,
-      studentName: c.student_name || 'Student',
-      studentId: c.student_id ? `#${c.student_id}` : `#${c.course_assignment_id}`,
       course: c.course_title || 'Music Course',
       courseLevel: c.is_catchup ? 'Catch-up' : 'Regular',
       dateTime: scheduledDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
-      meetingType: c.gmeet_link ? (status === 'Completed' ? 'Recording' : 'JoinActive') : 'Join',
-      meetingLink: c.gmeet_link || '#',
-      status,
-      hasFeedback: false
+      status
     };
   }
 
@@ -73,7 +63,7 @@
         apiGet<ApiClass[]>('/mentor/classes').catch(() => []),
         apiGet<any>('/mentor/stats').catch(() => null)
       ]);
-      classes = (classesData || []).map(mapApiClass);
+      scheduledClasses = (classesData || []).map(mapApiClass);
       
       if (statsData) {
         stats = {
@@ -82,6 +72,20 @@
           total_hours: statsData.upcoming_classes ?? statsData.total_hours ?? 0
         };
       }
+
+      try {
+        const requestsData = await apiGet<any[]>('/mentor/reschedule-requests');
+        rescheduleRequests = (requestsData || []).map(r => ({
+          id: r.id,
+          studentName: r.student_name || 'Student',
+          studentEmail: r.student_email || '',
+          course: r.course_title || 'Course',
+          requestedDateTime: r.requested_date ? new Date(r.requested_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Unknown'
+        }));
+      } catch (e) {
+        rescheduleRequests = [];
+      }
+
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : 'Failed to load classes';
     } finally {
@@ -89,143 +93,26 @@
     }
   });
 
-  function openScheduleModal(classId: number) {
-    scheduleClassId = classId;
-    scheduleStudentEmail = '';
-    scheduleError = '';
-    showScheduleModal = true;
-  }
-
-  function closeScheduleModal() {
-    showScheduleModal = false;
-  }
-
-  async function handleSchedule(e: SubmitEvent) {
-    e.preventDefault();
-    isScheduling = true;
-    scheduleError = '';
+  async function handleAcceptRequest(id: number) {
     try {
-      const res = await apiPost<any>('/mentor/classes/schedule', {
-        class_id: scheduleClassId,
-        student_email: scheduleStudentEmail
-      });
-      // Update local state
-      classes = classes.map(c => {
-        if (c.id === scheduleClassId) {
-          c.meetingLink = res.gmeet_link;
-          c.meetingType = 'JoinActive';
-        }
-        return c;
-      });
-      closeScheduleModal();
+      await apiPost(`/mentor/reschedule-requests/${id}/accept`, {});
+      rescheduleRequests = rescheduleRequests.filter(r => r.id !== id);
     } catch (err: any) {
-      scheduleError = err.message || 'Failed to schedule class';
-    } finally {
-      isScheduling = false;
+      alert(err.message || 'Failed to accept request');
     }
   }
 
-  function getInitials(name: string) {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  }
 </script>
 
 <div class="mentor-classes-view">
   <div class="header-row">
     <div class="header-text">
-      <h2>My Classes</h2>
-      <p>Manage and track your upcoming teaching schedule.</p>
+      <h2>My Classes & Requests</h2>
+      <p>Manage your teaching schedule and student reschedule requests.</p>
     </div>
     <button class="schedule-btn">
       <span><Icon name="plus" size={14} /></span> Schedule Class
     </button>
-  </div>
-
-  <div class="filter-card">
-    <button class="filters-btn"><span><Icon name="filter" size={14} /></span> Filters</button>
-  </div>
-
-  <div class="table-card">
-    {#if isLoading}
-      <SkeletonLoader type="table" rows={5} cols={6} />
-    {:else if errorMsg}
-      <div class="empty-state error"><p>⚠️ {errorMsg}</p></div>
-    {:else}
-    <table class="classes-table">
-      <thead>
-        <tr>
-          <th>STUDENT NAME</th>
-          <th>COURSE</th>
-          <th>DATE & TIME</th>
-          <th>MEETING LINK</th>
-          <th>STATUS</th>
-          <th>ACTIONS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if classes.length === 0}
-          <tr><td colspan="6" class="empty-cell">No classes scheduled yet.</td></tr>
-        {/if}
-        {#each classes as item}
-          <tr>
-            <td class="student-cell">
-              <div class="avatar-circle">{getInitials(item.studentName)}</div>
-              <div class="student-info">
-                <span class="name">{item.studentName}</span>
-                <span class="id">Student ID: {item.studentId}</span>
-              </div>
-            </td>
-            <td>
-              <div class="course-name">{item.course}</div>
-              <div class="course-level">{item.courseLevel}</div>
-            </td>
-            <td class="date-text">{item.dateTime}</td>
-            <td>
-              {#if item.meetingType === 'Join'}
-                <button class="zoom-link red" style="background:none;border:1px solid #e53e3e;cursor:pointer;" onclick={() => openScheduleModal(item.id)}>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                  </svg>
-                  Generate Link
-                </button>
-              {:else if item.meetingType === 'JoinActive'}
-                <a href={item.meetingLink} class="zoom-link green" target="_blank" rel="noreferrer">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                  </svg>
-                  Join Meeting
-                </a>
-              {:else}
-                <span class="recording-link"><Icon name="activity" size={13} /> Recording</span>
-              {/if}
-            </td>
-            <td>
-              <span class="status-badge" class:upcoming={item.status === 'Upcoming'} class:active={item.status === 'In Progress'} class:completed={item.status === 'Completed'}>
-                {item.status}
-              </span>
-            </td>
-            <td>
-              <div class="actions-row">
-                {#if item.status === 'Upcoming'}
-                  <button class="action-btn red" title="Cancel class"><Icon name="x" size={14} /></button>
-                  <button class="action-btn" title="Reschedule"><Icon name="calendar" size={14} /></button>
-                {:else if item.status === 'In Progress'}
-                  <button class="join-now-btn">Join Now</button>
-                {:else if item.status === 'Completed'}
-                  <button class="feedback-btn">Feedback</button>
-                {/if}
-                <button class="info-btn" title="Class Details"><Icon name="info" size={14} /></button>
-              </div>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-
-    <div class="table-footer">
-      <span class="results-count">Showing {classes.length} class{classes.length !== 1 ? 'es' : ''}</span>
-    </div>
-    {/if}
   </div>
 
   <div class="classes-stats-grid">
@@ -240,7 +127,7 @@
     <div class="summary-card stat-card">
       <div class="stat-icon yellow-bg"><Icon name="star" size={20} /></div>
       <div class="stat-info">
-        <span class="label">Avg. Rating</span>
+        <span class="label">Students</span>
         <div class="value">{stats.avg_rating}</div>
       </div>
     </div>
@@ -248,38 +135,111 @@
     <div class="summary-card stat-card">
       <div class="stat-icon purple-bg"><Icon name="clock" size={20} /></div>
       <div class="stat-info">
-        <span class="trend">TOTAL HOURS</span>
+        <span class="label">Upcoming</span>
         <div class="value">{stats.total_hours}</div>
-        <span class="label">Teaching Hours</span>
       </div>
     </div>
   </div>
-  <!-- Schedule Modal -->
-  {#if showScheduleModal}
-    <div class="modal-overlay" onclick={closeScheduleModal} aria-hidden="true">
-      <div class="modal-content" onclick={e => e.stopPropagation()} role="dialog">
-        <div class="modal-header">
-          <h3>Generate Meeting Link</h3>
-          <button class="close-btn" onclick={closeScheduleModal}>&times;</button>
-        </div>
-        <form class="modal-form" onsubmit={handleSchedule}>
-          <div class="form-group">
-            <label for="studentEmail">Student Email</label>
-            <input type="email" id="studentEmail" bind:value={scheduleStudentEmail} placeholder="student@example.com" required style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background-color: #f8fafc; font-size: 0.9rem; width: 100%;" />
-            <span style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Needed for Google Calendar invite</span>
-          </div>
-          {#if scheduleError}
-            <div style="color: #e53e3e; font-size: 0.9rem; margin-top: 10px;">{scheduleError}</div>
-          {/if}
-          <div class="modal-actions" style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
-            <button type="button" class="cancel-btn" onclick={closeScheduleModal} style="padding: 10px 16px; border: 1px solid var(--border-color); background: white; border-radius: var(--radius-md); cursor: pointer;">Cancel</button>
-            <button type="submit" class="save-btn" disabled={isScheduling} style="padding: 10px 16px; border: none; background: var(--primary); color: white; border-radius: var(--radius-md); font-weight: 600; cursor: pointer;">
-              {isScheduling ? 'Generating...' : 'Generate Link'}
-            </button>
-          </div>
-        </form>
+
+  {#if isLoading}
+    <SkeletonLoader type="table" rows={4} cols={5} />
+  {:else if errorMsg}
+    <div class="empty-state error"><p>⚠️ {errorMsg}</p></div>
+  {:else}
+
+    <!-- Table 1: Mentor Scheduled Classes -->
+    <div class="table-card">
+      <div class="card-header">
+        <h3>My Scheduled Classes</h3>
+        <p class="subtitle">Classes you have scheduled. Links are automatically generated and emailed to enrolled students.</p>
       </div>
+      <table class="classes-table">
+        <thead>
+          <tr>
+            <th>COURSE</th>
+            <th>DATE & TIME</th>
+            <th>STATUS</th>
+            <th style="text-align: right;">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#if scheduledClasses.length === 0}
+            <tr><td colspan="4" class="empty-cell">No classes scheduled yet.</td></tr>
+          {/if}
+          {#each scheduledClasses as item}
+            <tr>
+              <td>
+                <div class="course-name">{item.course}</div>
+                <div class="course-level">{item.courseLevel}</div>
+              </td>
+              <td class="date-text">{item.dateTime}</td>
+              <td>
+                <span class="status-badge" class:upcoming={item.status === 'Upcoming'} class:active={item.status === 'In Progress'} class:completed={item.status === 'Completed'}>
+                  {item.status}
+                </span>
+              </td>
+              <td style="text-align: right;">
+                <div class="actions-row">
+                  {#if item.status === 'Upcoming'}
+                    <button class="action-btn" title="Edit Class"><Icon name="edit" size={14} /></button>
+                    <button class="action-btn red" title="Cancel Class"><Icon name="x" size={14} /></button>
+                  {:else}
+                    <button class="info-btn" title="Class Details"><Icon name="info" size={14} /></button>
+                  {/if}
+                </div>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
+
+    <!-- Table 2: Student Reschedule Requests -->
+    <div class="table-card request-card">
+      <div class="card-header">
+        <h3>Student Reschedule Requests</h3>
+        <p class="subtitle">Students asking to reschedule a missed or upcoming class.</p>
+      </div>
+      <table class="classes-table">
+        <thead>
+          <tr>
+            <th>STUDENT NAME</th>
+            <th>COURSE</th>
+            <th>REQUESTED DATE & TIME</th>
+            <th style="text-align: right;">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#if rescheduleRequests.length === 0}
+            <tr><td colspan="4" class="empty-cell">No pending reschedule requests.</td></tr>
+          {/if}
+          {#each rescheduleRequests as req}
+            <tr>
+              <td>
+                <div class="student-info">
+                  <span class="name">{req.studentName}</span>
+                </div>
+              </td>
+              <td>
+                <div class="course-name">{req.course}</div>
+              </td>
+              <td class="date-text" style="color: #dd6b20; font-weight: 700;">{req.requestedDateTime}</td>
+              <td style="text-align: right;">
+                <div class="actions-row">
+                  <button class="accept-btn" onclick={() => handleAcceptRequest(req.id)}>
+                    <Icon name="check" size={14} /> Accept
+                  </button>
+                  <a href={`mailto:${req.studentEmail}?subject=Rescheduling ${req.course} Class`} class="email-btn">
+                    <Icon name="mail" size={14} /> Email
+                  </a>
+                </div>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+
   {/if}
 </div>
 
@@ -316,40 +276,86 @@
     padding: 10px 18px;
     font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(229, 62, 62, 0.2);
+    font-size: 0.9rem;
     display: flex;
     align-items: center;
     gap: 8px;
+    box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2);
+    transition: all 0.2s;
   }
 
-  .filter-card {
+  .schedule-btn:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-1px);
+  }
+
+  .classes-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .stat-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 16px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
     box-shadow: var(--shadow-sm);
   }
 
-  .filters-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-main);
-    font-weight: 600;
-    padding: 8px 16px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
+  .stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    font-size: 1.2rem;
   }
 
-  /* Table Card styling */
+  .stat-icon.red-bg { background-color: #fff5f5; color: #e53e3e; }
+  .stat-icon.yellow-bg { background-color: #fffff0; color: #d69e2e; }
+  .stat-icon.purple-bg { background-color: #faf5ff; color: #805ad5; }
+
+  .stat-info { display: flex; flex-direction: column; }
+  .stat-info .label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+  .stat-info .value { font-size: 1.6rem; font-weight: 700; color: var(--text-main); }
+
   .table-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
+  }
+  
+  .request-card {
+    border: 1px solid #feebc8;
+  }
+  
+  .request-card .card-header {
+    background-color: #fffaf0;
+    border-bottom: 1px solid #feebc8;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .card-header h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .card-header .subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 4px;
   }
 
   .classes-table {
@@ -362,7 +368,7 @@
     font-size: 0.75rem;
     font-weight: 700;
     color: var(--text-muted);
-    padding: 14px 20px;
+    padding: 12px 20px;
     border-bottom: 1px solid var(--border-color);
     background-color: #fafbfc;
   }
@@ -374,70 +380,13 @@
     vertical-align: middle;
   }
 
-  .student-cell {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .avatar-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background-color: #fed7d7;
-    color: #c53030;
-    font-weight: 700;
-    font-size: 0.8rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .student-info {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .student-info .name {
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .student-info .id {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .course-name {
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .course-level {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .date-text {
-    font-weight: 500;
-    color: var(--text-main);
-  }
-
-  .zoom-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 700;
-  }
-
-  .zoom-link.red { color: #e53e3e; }
-  .zoom-link.green { color: #38a169; }
-
-  .recording-link {
-    color: var(--text-muted);
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
+  .student-info { display: flex; flex-direction: column; }
+  .student-info .name { font-weight: 700; color: var(--text-main); }
+  
+  .course-name { font-weight: 700; color: var(--text-main); }
+  .course-level { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; background-color: #edf2f7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;}
+  
+  .date-text { font-weight: 600; color: var(--text-muted); }
 
   .status-badge {
     padding: 4px 10px;
@@ -453,142 +402,62 @@
 
   .actions-row {
     display: flex;
-    align-items: center;
+    justify-content: flex-end;
     gap: 8px;
+    align-items: center;
   }
 
-  .action-btn {
-    border: 1px solid var(--border-color);
-    background: transparent;
-    width: 28px;
-    height: 28px;
+  .action-btn, .info-btn {
+    width: 32px;
+    height: 32px;
     border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: 0.8rem;
     display: flex;
     align-items: center;
     justify-content: center;
+    border: 1px solid var(--border-color);
+    background-color: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
   }
 
-  .join-now-btn {
-    background-color: var(--primary);
+  .action-btn:hover, .info-btn:hover { background-color: #f7fafc; color: var(--text-main); }
+  .action-btn.red:hover { background-color: #fff5f5; color: #e53e3e; border-color: #feb2b2; }
+
+  .accept-btn {
+    background-color: #48bb78;
     color: white;
     border: none;
     border-radius: var(--radius-sm);
     padding: 6px 14px;
-    font-weight: 600;
     font-size: 0.8rem;
+    font-weight: 700;
     cursor: pointer;
-  }
-
-  .feedback-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-main);
-    padding: 6px 14px;
-    font-weight: 600;
-    font-size: 0.8rem;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-  }
-
-  .info-btn {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 1rem;
-    color: var(--text-muted);
-  }
-
-  .table-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    background-color: #fafbfc;
-  }
-
-  .results-count {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  .pagination {
     display: flex;
     align-items: center;
     gap: 6px;
+    box-shadow: 0 2px 4px rgba(72, 187, 120, 0.2);
   }
 
-  .pag-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-muted);
-    padding: 6px 12px;
+  .email-btn {
+    background-color: transparent;
+    color: #4299e1;
+    border: 1px solid #4299e1;
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
     font-size: 0.8rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
+    font-weight: 700;
     cursor: pointer;
-  }
-
-  .pag-btn.active {
-    background-color: var(--primary);
-    color: white;
-    border-color: var(--primary);
-  }
-
-  /* Stats grid */
-  .classes-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-  }
-
-  .classes-stats-grid .stat-card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 20px;
     display: flex;
     align-items: center;
-    gap: 16px;
-    box-shadow: var(--shadow-sm);
+    gap: 6px;
+    text-decoration: none;
   }
 
-  .classes-stats-grid .stat-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-  }
-
-  .classes-stats-grid .stat-icon.red-bg { background-color: #fff5f5; color: #e53e3e; }
-  .classes-stats-grid .stat-icon.yellow-bg { background-color: #fffaf0; color: #dd6b20; }
-  .classes-stats-grid .stat-icon.purple-bg { background-color: #faf5ff; color: #805ad5; }
-
-  .classes-stats-grid .stat-info {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .classes-stats-grid .trend {
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: #38a169;
-  }
-
-  .classes-stats-grid .value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-main);
-    line-height: 1.2;
-  }
-
-  .classes-stats-grid .label {
-    font-size: 0.75rem;
+  .empty-cell {
+    text-align: center;
     color: var(--text-muted);
-    font-weight: 600;
+    padding: 40px !important;
+    font-style: italic;
   }
 </style>

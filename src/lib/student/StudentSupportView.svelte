@@ -258,14 +258,14 @@
                 <div class="msg-bubble">
                   {msg.message}
                 </div>
-                <div class="msg-time">{new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                <div class="msg-time">{new Date(msg.timestamp || msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
               </div>
             {/each}
           {/if}
         </div>
         <form class="chat-input-area" onsubmit={sendMessage}>
           <input type="text" bind:value={newMessage} placeholder="Type your message..." />
-          <button type="submit" disabled={!newMessage.trim()}><Icon name="send" size={16} /></button>
+          <button type="submit" class="send-btn" disabled={!newMessage.trim()}><Icon name="send" size={16} /></button>
         </form>
       </div>
     </div>
@@ -492,17 +492,27 @@
     background: var(--bg-page);
     color: var(--text-main);
   }
-  .chat-input-area button {
+  .send-btn {
+    background: linear-gradient(135deg, var(--primary), #e53e3e);
+    color: white;
+    border: none;
+    border-radius: 50%;
     width: 44px;
     height: 44px;
-    border-radius: 50%;
-    border: none;
-    background: var(--primary);
-    color: white;
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(229, 62, 62, 0.2);
+    transition: transform 0.1s, box-shadow 0.1s;
   }
-  .chat-input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .send-btn:active {
+    transform: scale(0.95);
+  }
+  .send-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #cbd5e0;
+    box-shadow: none;
+  }
 </style>

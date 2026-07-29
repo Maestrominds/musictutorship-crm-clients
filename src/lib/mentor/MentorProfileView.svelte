@@ -193,88 +193,7 @@
     </div>
   </div>
 
-  <!-- Availability Settings Card -->
-  <div class="settings-card">
-    <div class="card-header-row">
-      <div class="avail-title-row">
-        <h3>Availability Settings</h3>
-        <span class="active-badge">ACTIVE SCHEDULE</span>
-      </div>
-    </div>
-
-    <form class="availability-form" onsubmit={handleAddAvailability} style="margin-top: 20px;">
-      <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.95rem;">Set a block of time you are available to teach.</p>
-      
-      <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
-        <div class="form-group" style="flex: 1; min-width: 200px;">
-          <label for="start-time">Start Time</label>
-          <input type="datetime-local" id="start-time" bind:value={startTime} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;" />
-        </div>
-        <div class="form-group" style="flex: 1; min-width: 200px;">
-          <label for="end-time">End Time</label>
-          <input type="datetime-local" id="end-time" bind:value={endTime} required style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;" />
-        </div>
-        <button type="submit" class="save-btn" disabled={isSavingAvail} style="margin-bottom: 15px;">
-          {isSavingAvail ? 'Saving...' : 'Add Slot'}
-        </button>
-      </div>
-
-      {#if availStatus}
-        <div style="margin-top: 10px; font-size: 0.9rem; color: {availStatus.includes('success') ? 'green' : '#e53e3e'}">
-          {availStatus}
-        </div>
-      {/if}
-    </form>
-  </div>
-
-  <!-- Bottom cards: Preferences & Security -->
-  <div class="preferences-grid">
-    <!-- Notification Preferences -->
-    <div class="settings-card">
-      <div class="card-header-row">
-        <h3>Notification Preferences</h3>
-      </div>
-      
-      <div class="preference-item">
-        <div class="pref-text">
-          <span class="title">Class Reminders</span>
-          <span class="desc">Get notified 15 minutes before your class starts</span>
-        </div>
-        <div class="switches-col">
-          <label class="pref-toggle">
-            <span class="lbl">Email</span>
-            <label class="switch">
-              <input type="checkbox" bind:checked={reminderEmail} />
-              <span class="slider round"></span>
-            </label>
-          </label>
-          <label class="pref-toggle">
-            <span class="lbl">Push</span>
-            <label class="switch">
-              <input type="checkbox" bind:checked={reminderPush} />
-              <span class="slider round"></span>
-            </label>
-          </label>
-        </div>
-      </div>
-
-      <div class="preference-item">
-        <div class="pref-text">
-          <span class="title">Student Messages</span>
-          <span class="desc">Alerts when students send you direct messages</span>
-        </div>
-        <div class="switches-col">
-          <label class="pref-toggle">
-            <span class="lbl">Alerts</span>
-            <label class="switch">
-              <input type="checkbox" bind:checked={messageAlerts} />
-              <span class="slider round"></span>
-            </label>
-          </label>
-        </div>
-      </div>
-    </div>
-
+  <!-- Bottom cards: Security -->
     <!-- Account Security -->
     <div class="settings-card">
       <div class="card-header-row">
@@ -299,7 +218,6 @@
         {/if}
       </form>
     </div>
-  </div>
 
   <!-- Danger Zone -->
   <div class="danger-zone-box">

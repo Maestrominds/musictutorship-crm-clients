@@ -116,8 +116,7 @@
               <td class="next-class-text">{student.nextClass}</td>
               <td>
                 <div class="actions-row">
-                  <button class="action-btn" title="View Progress"><Icon name="eye" size={14} /></button>
-                  <button class="action-btn" title="Message Student"><Icon name="mail" size={14} /></button>
+                  <a href="mailto:{student.email}" class="action-btn" title="Message Student" style="display: flex; align-items: center; justify-content: center; text-decoration: none; color: inherit;"><Icon name="mail" size={14} /></a>
                 </div>
               </td>
             </tr>

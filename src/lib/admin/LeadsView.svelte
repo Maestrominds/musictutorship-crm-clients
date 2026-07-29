@@ -20,16 +20,29 @@
   let isSubmitting = $state(false);
   let isActionLoading = $state(false);
   let actionMessage = $state('');
+
+  // Trial Modal state
+  let showTrialModal = $state(false);
+  let trialDate = $state('');
+  let trialTime = $state('');
+  let selectedLead = $state<Lead | null>(null);
+
+  // Student Modal state
+  let showStudentModal = $state(false);
+  let studentName = $state('');
+  let studentEmail = $state('');
+  let studentCourseId = $state<number | null>(null);
+
+  let availableCourses = $state<{id: number, title: string}[]>([]);
+
   void isLoading;
-  void errorMsg;
-  void isSubmitting;
 
   // Form inputs for adding a lead
   let showAddModal = $state(false);
   let newLeadName = $state('');
   let newLeadEmail = $state('');
   let newLeadPhone = $state('');
-  let newLeadCourse = $state('Classical Piano');
+  let newLeadCourseId = $state<number | null>(null);
   let submitError = $state('');
 
   // Filter inputs
@@ -53,8 +66,14 @@
 
   onMount(async () => {
     try {
-      const data = await apiGet<any[]>('/admin/leads');
-      leads = (data || []).map(l => ({
+      const [leadsData, coursesData] = await Promise.all([
+        apiGet<any[]>('/admin/leads').catch(() => []),
+        apiGet<any[]>('/admin/courses').catch(() => [])
+      ]);
+      
+      availableCourses = coursesData || [];
+      
+      leads = (leadsData || []).map(l => ({
         id: l.id,
         name: l.name,
         phone: l.phone || '',
@@ -101,7 +120,7 @@
         name: newLeadName,
         phone: newLeadPhone,
         email: newLeadEmail,
-        course: newLeadCourse,
+        course: availableCourses.find(c => c.id === newLeadCourseId)?.title || 'Unknown',
         status: 'New',
         createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       };
@@ -117,6 +136,86 @@
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 1);
+  }
+
+  function openTrialModal(lead: Lead) {
+    selectedLead = lead;
+    trialDate = '';
+    trialTime = '';
+    showTrialModal = true;
+  }
+
+  function closeTrialModal() {
+    showTrialModal = false;
+    selectedLead = null;
+  }
+
+  async function scheduleTrial(e: SubmitEvent) {
+    e.preventDefault();
+    if (!selectedLead || !trialDate || !trialTime) return;
+
+    isActionLoading = true;
+    actionMessage = 'Moving to trials...';
+    try {
+      await apiPost('/admin/trials', {
+        lead_id: selectedLead.id,
+        date: trialDate,
+        time: trialTime
+      });
+      // Optimistically mark as In Review
+      const idx = leads.findIndex(l => l.id === selectedLead!.id);
+      if (idx !== -1) leads[idx].status = 'In Review';
+      closeTrialModal();
+    } catch (err) {
+      alert('Failed to schedule trial: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isActionLoading = false;
+    }
+  }
+
+  function openStudentModal(lead: Lead) {
+    selectedLead = lead;
+    studentName = lead.name;
+    studentEmail = lead.email;
+    studentCourseId = availableCourses.find(c => c.title === lead.course)?.id || null;
+    showStudentModal = true;
+  }
+
+  function closeStudentModal() {
+    showStudentModal = false;
+    selectedLead = null;
+  }
+
+  async function convertToStudent(e: SubmitEvent) {
+    e.preventDefault();
+    if (!selectedLead || !studentName || !studentEmail) return;
+
+    isActionLoading = true;
+    actionMessage = 'Creating student...';
+    try {
+      const res = await apiPost<any>('/admin/users', {
+        name: studentName,
+        email: studentEmail,
+        role: 'student'
+      });
+      
+      if (studentCourseId && res.id) {
+        await apiPost('/admin/assign', { course_id: studentCourseId, user_id: res.id }).catch(e => console.warn('Failed to assign course', e));
+      }
+
+      // Optimistically mark as Contacted
+      const idx = leads.findIndex(l => l.id === selectedLead!.id);
+      if (idx !== -1) leads[idx].status = 'Contacted';
+      closeStudentModal();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('adminActiveSubView', 'students');
+        window.location.reload();
+      }
+    } catch (err) {
+      alert('Failed to create student: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isActionLoading = false;
+    }
   }
 </script>
 
@@ -230,52 +329,20 @@
                 <td class="date-text">{lead.createdDate}</td>
                 <td>
                   <div style="display: flex; gap: 8px; align-items: center;">
-                    <select 
-                      class="status-select-premium {lead.status.toLowerCase().replace(' ', '-')}"
-                      value={lead.status} 
-                      onchange={async (e) => {
-                        const newStatus = (e.target as HTMLSelectElement).value;
-                        isActionLoading = true;
-                        actionMessage = 'Updating lead status...';
-                        try {
-                          await apiFetch(`/admin/leads/${lead.id}/status`, {
-                            method: 'PATCH',
-                            body: JSON.stringify({ status: newStatus })
-                          });
-                          lead.status = newStatus as any;
-                        } catch (err) {
-                          alert('Failed to update lead status: ' + (err instanceof Error ? err.message : String(err)));
-                        } finally {
-                          isActionLoading = false;
-                        }
-                      }}
+                    <button 
+                      class="move-to-trials-btn"
+                      style="background-color: #3182ce; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;"
+                      onclick={() => openTrialModal(lead)}
                     >
-                      <option value="New">New</option>
-                      <option value="In Review">In Review</option>
-                      <option value="Contacted">Contacted</option>
-                    </select>
-
-                    {#if lead.status !== 'Contacted'}
-                      <button 
-                        onclick={async () => {
-                          isActionLoading = true;
-                          actionMessage = 'Converting lead to student...';
-                          try {
-                            await apiPost(`/admin/leads/${lead.id}/convert`, {});
-                            lead.status = 'Contacted';
-                          } catch (err) {
-                            alert('Failed to convert lead: ' + (err instanceof Error ? err.message : String(err)));
-                          } finally {
-                            isActionLoading = false;
-                          }
-                        }}
-                        style="padding: 4px 8px; border-radius: 4px; border: none; background: #e53e3e; color: white; font-size: 0.8rem; cursor: pointer;"
-                      >
-                        Convert
-                      </button>
-                    {:else}
-                      <span style="font-size: 0.85rem; color: #38a169; font-weight: 600;">Converted</span>
-                    {/if}
+                      <Icon name="calendar" size={14} /> Move to Trials
+                    </button>
+                    <button 
+                      class="move-to-student-btn"
+                      style="background-color: transparent; border: 1px solid #cbd5e0; color: #4a5568; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;"
+                      onclick={() => openStudentModal(lead)}
+                    >
+                      <Icon name="user-plus" size={14} /> Move to Student
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -358,10 +425,11 @@
           </div>
           <div class="form-group">
             <label for="lead-course">Course Interested</label>
-            <select id="lead-course" bind:value={newLeadCourse}>
-              <option value="Classical Piano">Classical Piano</option>
-              <option value="Vocal Mastery">Vocal Mastery</option>
-              <option value="Guitar Theory">Guitar Theory</option>
+            <select id="lead-course" bind:value={newLeadCourseId}>
+              <option value={null}>-- Select a Course --</option>
+              {#each availableCourses as course}
+                <option value={course.id}>{course.title}</option>
+              {/each}
             </select>
           </div>
           {#if submitError}
@@ -372,6 +440,98 @@
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeModal}>Cancel</button>
             <button type="submit" class="submit-btn">Save Lead</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Trial Schedule Modal -->
+  {#if showTrialModal}
+    <div class="modal-overlay" onclick={closeTrialModal} aria-hidden="true">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+        <div class="modal-header">
+          <h3>Schedule Trial Class</h3>
+          <button class="close-btn" onclick={closeTrialModal}>&times;</button>
+        </div>
+        <form onsubmit={scheduleTrial} class="modal-form">
+          <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9rem;">
+            Scheduling trial class for <strong>{selectedLead?.name}</strong> ({selectedLead?.email}).
+          </p>
+          <div class="form-group">
+            <label for="trial-date">Date</label>
+            <input type="date" id="trial-date" bind:value={trialDate} required />
+          </div>
+          <div class="form-group">
+            <label for="trial-time">Time</label>
+            <select id="trial-time" bind:value={trialTime} required>
+              <option value="" disabled>-- Select Time --</option>
+              <option value="09:00 AM">09:00 AM</option>
+              <option value="09:30 AM">09:30 AM</option>
+              <option value="10:00 AM">10:00 AM</option>
+              <option value="10:30 AM">10:30 AM</option>
+              <option value="11:00 AM">11:00 AM</option>
+              <option value="11:30 AM">11:30 AM</option>
+              <option value="12:00 PM">12:00 PM</option>
+              <option value="12:30 PM">12:30 PM</option>
+              <option value="01:00 PM">01:00 PM</option>
+              <option value="01:30 PM">01:30 PM</option>
+              <option value="02:00 PM">02:00 PM</option>
+              <option value="02:30 PM">02:30 PM</option>
+              <option value="03:00 PM">03:00 PM</option>
+              <option value="03:30 PM">03:30 PM</option>
+              <option value="04:00 PM">04:00 PM</option>
+              <option value="04:30 PM">04:30 PM</option>
+              <option value="05:00 PM">05:00 PM</option>
+              <option value="05:30 PM">05:30 PM</option>
+              <option value="06:00 PM">06:00 PM</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="cancel-btn" onclick={closeTrialModal}>Cancel</button>
+            <button type="submit" class="submit-btn" disabled={isActionLoading}>
+              {isActionLoading ? 'Scheduling...' : 'Confirm Trial'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Create Student Modal -->
+  {#if showStudentModal}
+    <div class="modal-overlay" onclick={closeStudentModal} aria-hidden="true">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+        <div class="modal-header">
+          <h3>Move as Student</h3>
+          <button class="close-btn" onclick={closeStudentModal}>&times;</button>
+        </div>
+        <form onsubmit={convertToStudent} class="modal-form">
+          <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9rem;">
+            Create a new student account for this lead.
+          </p>
+          <div class="form-group">
+            <label for="student-name">Name</label>
+            <input type="text" id="student-name" bind:value={studentName} required />
+          </div>
+          <div class="form-group">
+            <label for="student-email">Email</label>
+            <input type="email" id="student-email" bind:value={studentEmail} required />
+          </div>
+          <div class="form-group">
+            <label for="student-course">Course</label>
+            <select id="student-course" bind:value={studentCourseId}>
+              <option value={null}>-- Select a Course --</option>
+              {#each availableCourses as course}
+                <option value={course.id}>{course.title}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="cancel-btn" onclick={closeStudentModal}>Cancel</button>
+            <button type="submit" class="submit-btn" disabled={isActionLoading}>
+              {isActionLoading ? 'Creating...' : 'Create Student'}
+            </button>
           </div>
         </form>
       </div>
@@ -842,43 +1002,22 @@
     }
   }
 
-  .status-select-premium {
+  .move-to-trials-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 6px 12px;
-    border-radius: var(--radius-md, 6px);
-    font-size: 0.75rem;
-    font-weight: 700;
-    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid var(--primary);
+    background-color: transparent;
+    color: var(--primary);
     cursor: pointer;
-    outline: none;
-    transition: all 0.2s ease;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234a5568' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 8px center;
-    background-size: 10px;
-    padding-right: 24px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: inline-block;
+    transition: all 0.2s;
   }
-  .status-select-premium.new {
-    background-color: #ebf8ff;
-    color: #2b6cb0;
-    border-color: #bee3f8;
-  }
-  .status-select-premium.in-review {
-    background-color: #faf5ff;
-    color: #553c9a;
-    border-color: #e9d8fd;
-  }
-  .status-select-premium.contacted {
-    background-color: #c6f6d5;
-    color: #22543d;
-    border-color: #c6f6d5;
-  }
-  .status-select-premium:hover {
-    filter: brightness(0.95);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  .move-to-trials-btn:hover {
+    background-color: var(--primary);
+    color: white;
   }
 </style>

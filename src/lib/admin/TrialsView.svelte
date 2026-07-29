@@ -1,186 +1,231 @@
 <script lang="ts">
   import Icon from '$lib/Icon.svelte';
+  import { onMount } from 'svelte';
+  import { apiGet, apiPost, apiFetch } from '$lib/api';
+  import SkeletonLoader from '$lib/SkeletonLoader.svelte';
 
   interface Trial {
     id: number;
-    studentName: string;
-    mentor: string;
-    dateTime: string;
-    meetingLink: string;
-    status: 'Scheduled' | 'Completed' | 'Cancelled';
+    lead_id: number;
+    lead_name: string;
+    lead_email: string;
+    course: string;
+    trial_date: string;
+    trial_time: string;
+    status: string;
   }
 
-  // Trials endpoint does not exist in the backend — this view shows an empty state.
   let trials = $state<Trial[]>([]);
-  let activeTab = $state<'Upcoming' | 'Completed' | 'Cancelled'>('Upcoming');
+  let isLoading = $state(true);
+  let errorMsg = $state('');
+  let isActionLoading = $state(false);
+  let actionMessage = $state('');
 
-  // Filtered schedules computation
+  let searchQuery = $state('');
+  let filterStatus = $state('All');
+
   let filteredTrials = $derived(
     trials.filter(t => {
-      if (activeTab === 'Upcoming') return t.status === 'Scheduled';
-      return t.status === activeTab;
+      const matchSearch = t.lead_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          t.lead_email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchStatus = filterStatus === 'All' || t.status === filterStatus;
+      return matchSearch && matchStatus;
     })
   );
 
-  const totalTrials = $derived(trials.length);
-  const pendingTrials = $derived(trials.filter(t => t.status === 'Scheduled').length);
+  onMount(async () => {
+    try {
+      const data = await apiGet<any[]>('/admin/trials');
+      trials = (data || []).map(t => ({
+        id: t.id,
+        lead_id: t.lead_id,
+        lead_name: t.lead_name || 'Unknown',
+        lead_email: t.lead_email || '',
+        course: t.course || 'Classical Piano',
+        trial_date: t.date || 'N/A',
+        trial_time: t.time || 'N/A',
+        status: t.status || 'Scheduled'
+      }));
+    } catch (err) {
+      errorMsg = 'Failed to load trials';
+    } finally {
+      isLoading = false;
+    }
+  });
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 1);
   }
+
+  async function convertToStudent(trial: Trial) {
+    if (!confirm(`Are you sure you want to convert ${trial.lead_name} to a student?`)) return;
+    
+    isActionLoading = true;
+    actionMessage = 'Converting to student...';
+    try {
+      // Use standard user creation instead of a custom convert endpoint
+      await apiPost('/admin/users', { 
+        name: trial.lead_name, 
+        email: trial.lead_email, 
+        role: 'student' 
+      });
+      
+      // Update trial status to Completed
+      await apiFetch(`/admin/trials/${trial.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'Completed' })
+      });
+      trial.status = 'Completed';
+      alert(`${trial.lead_name} successfully added as a student!`);
+    } catch (err: any) {
+      alert('Failed to convert: ' + (err.message || 'Unknown error'));
+    } finally {
+      isActionLoading = false;
+    }
+  }
+
+  async function removeTrial(trial: Trial) {
+    if (!confirm(`Are you sure you want to remove ${trial.lead_name} from trials?`)) return;
+    
+    isActionLoading = true;
+    actionMessage = 'Removing trial...';
+    try {
+      await apiFetch(`/admin/trials/${trial.id}`, { method: 'DELETE' });
+      trials = trials.filter(t => t.id !== trial.id);
+    } catch (err: any) {
+      alert('Failed to remove: ' + (err.message || 'Unknown error'));
+    } finally {
+      isActionLoading = false;
+    }
+  }
 </script>
 
 <div class="trials-view">
-  <!-- Trials Page Header -->
-  <div class="trials-header-row">
+  {#if isActionLoading}
+    <div class="action-loading-overlay">
+      <div class="spinner"></div>
+      <div>{actionMessage}</div>
+    </div>
+  {/if}
+
+  <div class="header-row">
     <div class="header-text">
-      <h2>Trial Classes</h2>
-      <p>Manage and track introductory sessions for potential students.</p>
-    </div>
-    
-    <!-- Navigation Tabs -->
-    <div class="tabs-control">
-      <button 
-        class="tab-btn" 
-        class:active={activeTab === 'Upcoming'} 
-        onclick={() => activeTab = 'Upcoming'}
-      >
-        Upcoming
-      </button>
-      <button 
-        class="tab-btn" 
-        class:active={activeTab === 'Completed'} 
-        onclick={() => activeTab = 'Completed'}
-      >
-        Completed
-      </button>
-      <button 
-        class="tab-btn" 
-        class:active={activeTab === 'Cancelled'} 
-        onclick={() => activeTab = 'Cancelled'}
-      >
-        Cancelled
-      </button>
+      <h2>Trials Management</h2>
+      <p>Manage upcoming trial classes and convert successful trials to students.</p>
     </div>
   </div>
 
-  <!-- Top Stats Grid -->
-  <div class="trials-stats-grid">
-    <div class="trial-stat-card">
-      <div class="stat-main">
-        <div class="value">{totalTrials}</div>
-        <span class="trend">↗ total scheduled</span>
+  {#if isLoading}
+    <SkeletonLoader type="table" rows={5} cols={5} />
+  {:else}
+    <div class="filter-bar-card">
+      <div class="search-input-wrapper">
+        <span class="search-icon"><Icon name="search" size={15} /></span>
+        <input 
+          type="text" 
+          placeholder="Search trials by name or email..." 
+          bind:value={searchQuery}
+        />
       </div>
-      <div class="label">Total Trials (This week)</div>
-    </div>
-    
-    <div class="trial-stat-card">
-      <div class="stat-main">
-        <div class="value">{pendingTrials}</div>
-        <span class="trend warning"><Icon name="info" size={12} /> Requires action</span>
-      </div>
-      <div class="label">Pending Trials</div>
-    </div>
 
-    <div class="trial-stat-card">
-      <div class="stat-main">
-        <div class="value">N/A</div>
-        <span class="trend">Requires conversion endpoint</span>
-      </div>
-      <div class="label">Conversion Rate</div>
-    </div>
-
-    <div class="trial-stat-card">
-      <div class="stat-main">
-        <div class="value">N/A</div>
-        <span class="trend">Requires availability endpoint</span>
-      </div>
-      <div class="label">Available Mentors</div>
-    </div>
-  </div>
-
-  <!-- Schedules Table Card -->
-  <div class="table-card">
-    <div class="table-card-header">
-      <h3>Recent Schedules</h3>
-      <div class="actions-group">
-        <button class="icon-btn">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 6h16M6 12h12M10 18h4" />
-          </svg>
-        </button>
-        <button class="icon-btn">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+      <div class="dropdowns-group">
+        <div class="select-wrapper">
+          <label for="status-filter">Status:</label>
+          <select id="status-filter" bind:value={filterStatus}>
+            <option value="All">All</option>
+            <option value="Scheduled">Scheduled</option>
+            <option value="Completed">Completed</option>
+            <option value="No Show">No Show</option>
+          </select>
+        </div>
       </div>
     </div>
 
-    <table class="trials-table">
-      <thead>
-        <tr>
-          <th>STUDENT NAME</th>
-          <th>MENTOR</th>
-          <th>DATE & TIME</th>
-          <th>MEETING LINK</th>
-          <th>STATUS</th>
-          <th>ACTIONS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if filteredTrials.length === 0}
+    <div class="table-card">
+      <table class="trials-table">
+        <thead>
           <tr>
-            <td colspan="6" class="empty-row">No trial sessions available. This feature is coming soon.</td>
+            <th>PROSPECT NAME</th>
+            <th>CONTACT INFO</th>
+            <th>COURSE</th>
+            <th>SCHEDULE</th>
+            <th>STATUS</th>
+            <th>ACTIONS</th>
           </tr>
-        {:else}
-          {#each filteredTrials as trial}
+        </thead>
+        <tbody>
+          {#if filteredTrials.length === 0}
             <tr>
-              <td class="student-cell">
-                <div class="avatar-circle">{getInitials(trial.studentName)}</div>
-                <span class="name-text">{trial.studentName}</span>
-              </td>
-              <td class="mentor-text">{trial.mentor}</td>
-              <td class="date-text">{trial.dateTime}</td>
-              <td>
-                <a href={trial.meetingLink} class="zoom-link" target="_blank" rel="noreferrer">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                  </svg>
-                  Join Zoom
-                </a>
-              </td>
-              <td>
-                <span class="status-badge status-scheduled">
-                  {trial.status}
-                </span>
-              </td>
-              <td>
-                <div class="actions-row">
-                  <button class="action-btn play" title="Start Lesson">▶</button>
-                  <button class="action-btn cal" title="View Calendar"><Icon name="calendar" size={14} /></button>
-                  <button class="action-btn check" title="Mark Done">✓</button>
-                </div>
-              </td>
+              <td colspan="6" class="empty-row">No trials found matching your criteria.</td>
             </tr>
-          {/each}
-        {/if}
-      </tbody>
-    </table>
-
-    <div class="table-footer">
-      <span class="results-count">Showing 1-{filteredTrials.length} of 24 results</span>
-      <div class="pagination">
-        <button class="pag-btn prev">◀</button>
-        <button class="pag-btn active">1</button>
-        <button class="pag-btn">2</button>
-        <button class="pag-btn">3</button>
-        <span class="pag-dots">...</span>
-        <button class="pag-btn">9</button>
-        <button class="pag-btn next">▶</button>
+          {:else}
+            {#each filteredTrials as trial}
+              <tr>
+                <td>
+                  <div class="name-cell-inner">
+                    <div class="avatar-circle">{getInitials(trial.lead_name)}</div>
+                    <span class="name-text">{trial.lead_name}</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="contact-cell-inner">
+                    <div class="email-text">{trial.lead_email}</div>
+                  </div>
+                </td>
+                <td class="course-text">{trial.course}</td>
+                <td>
+                  <div class="schedule-cell">
+                    <span class="date">{trial.trial_date}</span>
+                    <span class="time">{trial.trial_time}</span>
+                  </div>
+                </td>
+                <td>
+                  <select 
+                    class="status-select {trial.status.toLowerCase().replace(' ', '-')}"
+                    value={trial.status} 
+                    onchange={async (e) => {
+                      const newStatus = (e.target as HTMLSelectElement).value;
+                      isActionLoading = true;
+                      actionMessage = 'Updating trial status...';
+                      try {
+                        await apiFetch(`/admin/trials/${trial.id}/status`, {
+                          method: 'PATCH',
+                          body: JSON.stringify({ status: newStatus })
+                        });
+                        trial.status = newStatus;
+                      } catch (err: any) {
+                        alert('Failed to update status: ' + (err.message || 'Unknown error'));
+                      } finally {
+                        isActionLoading = false;
+                      }
+                    }}
+                  >
+                    <option value="Scheduled">Scheduled</option>
+                    <option value="Completed">Completed</option>
+                    <option value="No Show">No Show</option>
+                  </select>
+                </td>
+                <td>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="action-btn convert" onclick={() => convertToStudent(trial)}>
+                      <Icon name="user-check" size={14} /> Move as Student
+                    </button>
+                    <button class="action-btn remove" onclick={() => removeTrial(trial)}>
+                      <Icon name="trash-2" size={14} /> Remove
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          {/if}
+        </tbody>
+      </table>
+      
+      <div class="table-footer">
+        <span class="results-count">Showing {filteredTrials.length} of {trials.length} trials</span>
       </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>
@@ -190,7 +235,7 @@
     gap: 24px;
   }
 
-  .trials-header-row {
+  .header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -208,114 +253,72 @@
     font-size: 0.95rem;
   }
 
-  /* Tabs styling */
-  .tabs-control {
-    display: flex;
-    background-color: #f1f4f9;
-    padding: 4px;
-    border-radius: var(--radius-md);
-  }
-
-  .tab-btn {
-    border: none;
-    background: transparent;
-    padding: 8px 16px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.2s;
-  }
-
-  .tab-btn.active {
-    background-color: var(--bg-card);
-    color: var(--primary);
-    box-shadow: var(--shadow-sm);
-  }
-
-  /* Stats Grid */
-  .trials-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-  }
-
-  .trial-stat-card {
+  /* Filter bar */
+  .filter-bar-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 20px;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .stat-main {
+    padding: 16px;
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 8px;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+    gap: 16px;
   }
 
-  .stat-main .value {
-    font-size: 1.8rem;
-    font-weight: 700;
+  .search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #f1f4f9;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    flex-grow: 1;
+    max-width: 450px;
+  }
+
+  .search-input-wrapper input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.9rem;
     color: var(--text-main);
-    line-height: 1.1;
+    width: 100%;
   }
 
-  .stat-main .trend {
-    font-size: 0.75rem;
-    font-weight: 700;
+  .dropdowns-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
   }
 
-  .stat-main .trend.positive { color: #38a169; }
-  .stat-main .trend.warning { color: #dd6b20; }
-  .stat-main .trend.neutral { color: #3182ce; }
-
-  .trial-stat-card .label {
-    font-size: 0.8rem;
+  .select-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
     color: var(--text-muted);
     font-weight: 600;
   }
 
-  /* Table Card styling */
+  .select-wrapper select {
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Table Card */
   .table-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
-  }
-
-  .table-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .table-card-header h3 {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .actions-group {
-    display: flex;
-    gap: 8px;
-  }
-
-  .icon-btn {
-    border: 1px solid var(--border-color);
-    background: transparent;
-    padding: 6px 10px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
   }
 
   .trials-table {
@@ -338,9 +341,10 @@
     font-size: 0.9rem;
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
+    white-space: nowrap;
   }
 
-  .student-cell {
+  .name-cell-inner {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -350,8 +354,8 @@
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background-color: #fed7d7;
-    color: #c53030;
+    background-color: #e2e8f0;
+    color: #4a5568;
     font-weight: 700;
     font-size: 0.8rem;
     display: flex;
@@ -364,68 +368,83 @@
     color: var(--text-main);
   }
 
-  .mentor-text {
-    font-weight: 600;
-    color: var(--text-main);
+  .contact-cell-inner {
+    display: flex;
+    flex-direction: column;
   }
 
-  .date-text {
-    font-weight: 500;
+  .email-text {
+    font-size: 0.85rem;
     color: var(--text-muted);
   }
 
-  .zoom-link {
+  .course-text {
+    font-weight: 500;
+    color: var(--text-main);
+  }
+
+  .schedule-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .schedule-cell .date {
+    font-weight: 600;
+    color: var(--text-main);
+  }
+  
+  .schedule-cell .time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .status-select {
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  .status-select.scheduled { background-color: #ebf8ff; color: #2b6cb0; border-color: #bee3f8; }
+  .status-select.completed { background-color: #c6f6d5; color: #22543d; border-color: #c6f6d5; }
+  .status-select.no-show { background-color: #fff5f5; color: #c53030; border-color: #fed7d7; }
+
+  .action-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--primary);
-    font-weight: 700;
-    transition: color 0.2s;
-  }
-
-  .zoom-link:hover {
-    color: var(--primary-hover);
-  }
-
-  .status-badge {
-    padding: 4px 10px;
-    border-radius: var(--radius-full);
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: inline-block;
-  }
-
-  .status-badge.status-scheduled {
-    background-color: #ebf8ff;
-    color: #2b6cb0;
-  }
-
-  .actions-row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .action-btn {
-    border: 1px solid var(--border-color);
-    background-color: transparent;
-    cursor: pointer;
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
     font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
     transition: all 0.2s;
   }
-
-  .action-btn:hover {
-    background-color: #edf2f7;
+  
+  .action-btn.convert {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    box-shadow: 0 2px 4px rgba(229, 62, 62, 0.2);
+  }
+  .action-btn.convert:hover {
+    background-color: var(--primary-hover);
   }
 
-  .action-btn.play { color: #38a169; }
-  .action-btn.cal { color: #3182ce; }
-  .action-btn.check { color: #e53e3e; }
+  .action-btn.remove {
+    background-color: transparent;
+    color: #a0aec0;
+    border: 1px solid #e2e8f0;
+  }
+  .action-btn.remove:hover {
+    background-color: #fff5f5;
+    color: #e53e3e;
+    border-color: #fc8181;
+  }
 
   .empty-row {
     text-align: center;
@@ -433,7 +452,6 @@
     padding: 32px !important;
   }
 
-  /* Footer styling */
   .table-footer {
     display: flex;
     justify-content: space-between;
@@ -448,44 +466,25 @@
     font-weight: 500;
   }
 
-  .pagination {
+  .action-loading-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.7);
+    z-index: 9999;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
-  }
-
-  .pag-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-muted);
-    padding: 6px 12px;
-    font-size: 0.8rem;
+    justify-content: center;
     font-weight: 600;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s;
+    color: var(--primary);
+    gap: 10px;
   }
-
-  .pag-btn:hover {
-    background-color: #f7fafc;
-    color: var(--text-main);
+  .spinner {
+    width: 30px; height: 30px;
+    border: 3px solid rgba(229, 62, 62, 0.3);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
   }
-
-  .pag-btn.active {
-    background-color: var(--primary);
-    color: white;
-    border-color: var(--primary);
-  }
-
-  .pag-dots {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    padding: 0 4px;
-  }
-
-  @media (max-width: 1024px) {
-    .trials-stats-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
