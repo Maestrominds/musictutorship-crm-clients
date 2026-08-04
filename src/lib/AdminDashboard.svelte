@@ -3,7 +3,6 @@
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
   import LeadsView from './admin/LeadsView.svelte';
-  import TrialsView from './admin/TrialsView.svelte';
   import StudentsView from './admin/StudentsView.svelte';
   import CoursesView from './admin/CoursesView.svelte';
   import PaymentsView from './admin/PaymentsView.svelte';
@@ -12,7 +11,7 @@
   import SkeletonLoader from './SkeletonLoader.svelte';
   import { apiGet } from './api';
 
-  let activeSubView = $state<'dashboard' | 'leads' | 'trials' | 'students' | 'courses' | 'payments' | 'mentors' | 'tickets'>(
+  let activeSubView = $state<'dashboard' | 'leads' | 'students' | 'courses' | 'payments' | 'mentors' | 'tickets'>(
     (typeof window !== 'undefined' ? localStorage.getItem('adminActiveSubView') as any : null) || 'dashboard'
   );
   let isPageTransitioning = $state(false);
@@ -50,7 +49,7 @@
   let upcomingClasses = $state<{ date: string; name: string; time: string; mentor: string }[]>([]);
   let recentPayments = $state<{ id: string; student: string; amount: string; date: string; status: string }[]>([]);
 
-  onMount(async () => {
+  async function loadData() {
     try {
       const statsRes = await apiGet<any>('/admin/stats');
       stats = {
@@ -102,6 +101,12 @@
     } catch (err) {
       console.error('Failed to fetch admin payments:', err);
     }
+  }
+
+  onMount(() => {
+    loadData();
+    const intervalId = setInterval(loadData, 30000);
+    return () => clearInterval(intervalId);
   });
 </script>
 
@@ -126,7 +131,7 @@
         <span class="nav-icon"><Icon name="dashboard" size={16} /></span> Dashboard
       </button>
       <button class="nav-item" class:active={activeSubView === 'leads'} onclick={() => navigateTo('leads')}><span class="nav-icon"><Icon name="users" size={16} /></span> Leads</button>
-      <button class="nav-item" class:active={activeSubView === 'trials'} onclick={() => navigateTo('trials')}><span class="nav-icon"><Icon name="calendar" size={16} /></span> Trials</button>
+
       <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => navigateTo('students')}><span class="nav-icon"><Icon name="graduation" size={16} /></span> Students</button>
       <button class="nav-item" class:active={activeSubView === 'courses'} onclick={() => navigateTo('courses')}><span class="nav-icon"><Icon name="book" size={16} /></span> Courses</button>
       <button class="nav-item" class:active={activeSubView === 'payments'} onclick={() => navigateTo('payments')}><span class="nav-icon"><Icon name="credit-card" size={16} /></span> Payments</button>
@@ -355,8 +360,7 @@
         </section>
       {:else if activeSubView === 'leads'}
         <LeadsView />
-      {:else if activeSubView === 'trials'}
-        <TrialsView />
+
       {:else if activeSubView === 'students'}
         <StudentsView />
       {:else if activeSubView === 'courses'}

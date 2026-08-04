@@ -21,10 +21,6 @@
   let isActionLoading = $state(false);
   let actionMessage = $state('');
 
-  // Trial Modal state
-  let showTrialModal = $state(false);
-  let trialDate = $state('');
-  let trialTime = $state('');
   let selectedLead = $state<Lead | null>(null);
 
   // Student Modal state
@@ -136,41 +132,6 @@
 
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 1);
-  }
-
-  function openTrialModal(lead: Lead) {
-    selectedLead = lead;
-    trialDate = '';
-    trialTime = '';
-    showTrialModal = true;
-  }
-
-  function closeTrialModal() {
-    showTrialModal = false;
-    selectedLead = null;
-  }
-
-  async function scheduleTrial(e: SubmitEvent) {
-    e.preventDefault();
-    if (!selectedLead || !trialDate || !trialTime) return;
-
-    isActionLoading = true;
-    actionMessage = 'Moving to trials...';
-    try {
-      await apiPost('/admin/trials', {
-        lead_id: selectedLead.id,
-        date: trialDate,
-        time: trialTime
-      });
-      // Optimistically mark as In Review
-      const idx = leads.findIndex(l => l.id === selectedLead!.id);
-      if (idx !== -1) leads[idx].status = 'In Review';
-      closeTrialModal();
-    } catch (err) {
-      alert('Failed to schedule trial: ' + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      isActionLoading = false;
-    }
   }
 
   function openStudentModal(lead: Lead) {
@@ -330,18 +291,11 @@
                 <td>
                   <div style="display: flex; gap: 8px; align-items: center;">
                     <button 
-                      class="move-to-trials-btn"
-                      style="background-color: #3182ce; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;"
-                      onclick={() => openTrialModal(lead)}
-                    >
-                      <Icon name="calendar" size={14} /> Move to Trials
-                    </button>
-                    <button 
                       class="move-to-student-btn"
                       style="background-color: transparent; border: 1px solid #cbd5e0; color: #4a5568; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;"
                       onclick={() => openStudentModal(lead)}
                     >
-                      <Icon name="user-plus" size={14} /> Move to Student
+                      <Icon name="user-plus" size={14} /> Convert
                     </button>
                   </div>
                 </td>
@@ -446,64 +400,13 @@
     </div>
   {/if}
 
-  <!-- Trial Schedule Modal -->
-  {#if showTrialModal}
-    <div class="modal-overlay" onclick={closeTrialModal} aria-hidden="true">
-      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
-        <div class="modal-header">
-          <h3>Schedule Trial Class</h3>
-          <button class="close-btn" onclick={closeTrialModal}>&times;</button>
-        </div>
-        <form onsubmit={scheduleTrial} class="modal-form">
-          <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9rem;">
-            Scheduling trial class for <strong>{selectedLead?.name}</strong> ({selectedLead?.email}).
-          </p>
-          <div class="form-group">
-            <label for="trial-date">Date</label>
-            <input type="date" id="trial-date" bind:value={trialDate} required />
-          </div>
-          <div class="form-group">
-            <label for="trial-time">Time</label>
-            <select id="trial-time" bind:value={trialTime} required>
-              <option value="" disabled>-- Select Time --</option>
-              <option value="09:00 AM">09:00 AM</option>
-              <option value="09:30 AM">09:30 AM</option>
-              <option value="10:00 AM">10:00 AM</option>
-              <option value="10:30 AM">10:30 AM</option>
-              <option value="11:00 AM">11:00 AM</option>
-              <option value="11:30 AM">11:30 AM</option>
-              <option value="12:00 PM">12:00 PM</option>
-              <option value="12:30 PM">12:30 PM</option>
-              <option value="01:00 PM">01:00 PM</option>
-              <option value="01:30 PM">01:30 PM</option>
-              <option value="02:00 PM">02:00 PM</option>
-              <option value="02:30 PM">02:30 PM</option>
-              <option value="03:00 PM">03:00 PM</option>
-              <option value="03:30 PM">03:30 PM</option>
-              <option value="04:00 PM">04:00 PM</option>
-              <option value="04:30 PM">04:30 PM</option>
-              <option value="05:00 PM">05:00 PM</option>
-              <option value="05:30 PM">05:30 PM</option>
-              <option value="06:00 PM">06:00 PM</option>
-            </select>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="cancel-btn" onclick={closeTrialModal}>Cancel</button>
-            <button type="submit" class="submit-btn" disabled={isActionLoading}>
-              {isActionLoading ? 'Scheduling...' : 'Confirm Trial'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  {/if}
 
   <!-- Create Student Modal -->
   {#if showStudentModal}
     <div class="modal-overlay" onclick={closeStudentModal} aria-hidden="true">
       <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
         <div class="modal-header">
-          <h3>Move as Student</h3>
+          <h3>Convert</h3>
           <button class="close-btn" onclick={closeStudentModal}>&times;</button>
         </div>
         <form onsubmit={convertToStudent} class="modal-form">

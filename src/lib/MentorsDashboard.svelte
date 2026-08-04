@@ -97,7 +97,7 @@
       <div class="user-profile">
         <div class="profile-details">
           <span class="user-name">{userName}</span>
-          <span class="user-role">Senior Mentor</span>
+          
         </div>
         <div class="avatar" style="display: flex; align-items: center; justify-content: center; background: #2b6cb0; color: white; border-radius: 50%; font-weight: 700; width: 36px; height: 36px; font-size: 1rem;">
           {userName.charAt(0).toUpperCase()}

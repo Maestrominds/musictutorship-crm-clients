@@ -147,7 +147,7 @@
         method: 'PUT',
         body: JSON.stringify({ name: editName, email: editEmail })
       });
-      if (editCourseId) {
+      if (editCourseId && editCourseId !== students.find(s => s.id === editStudentId)?.course_id) {
         await apiPost('/admin/assign', { course_id: editCourseId, user_id: editStudentId });
       }
     } catch (err) {
@@ -294,14 +294,14 @@
           </div>
           <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
             <label for="edit-course" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Assign Course</label>
-            <select id="edit-course" bind:value={editCourseId} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; background: white;">
+            <select id="edit-course" bind:value={editCourseId} disabled={students.find(s => s.id === editStudentId)?.course_id != null} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; background: white;">
               <option value={null}>-- Select a Course --</option>
               {#each courses as course}
                 <option value={course.id}>{course.name}</option>
               {/each}
             </select>
             <span style="font-size: 0.75rem; color: #718096; margin-top: 2px; display: flex; align-items: center; gap: 4px;">
-              <Icon name="info" size={12} /> Note: Mentors are assigned automatically based on the course they teach.
+              <Icon name="info" size={12} /> Note: A student is currently locked to one course.
             </span>
           </div>
           <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">

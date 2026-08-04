@@ -5,19 +5,7 @@
   // Profile settings state
   let fullName = $state('');
   let emailAddress = $state('');
-  let phoneNumber = $state('');
-  let specialty = $state('');
 
-  // Availability Settings
-  let startTime = $state('');
-  let endTime = $state('');
-  let availStatus = $state('');
-  let isSavingAvail = $state(false);
-
-  // Notification Preferences
-  let reminderEmail = $state(true);
-  let reminderPush = $state(true);
-  let messageAlerts = $state(true);
 
   // Password Reset
   let oldPassword = $state('');
@@ -34,10 +22,8 @@
     if (userJson) {
       try {
         const user = JSON.parse(userJson);
-        fullName = user.name || 'Instructor';
+        fullName = user.name || '';
         emailAddress = user.email || '';
-        phoneNumber = user.phone || '+1 (555) 000-1234';
-        specialty = user.specialty || 'Classical Piano';
       } catch (e) {
         console.error(e);
       }
@@ -57,9 +43,7 @@
         method: 'PUT',
         body: JSON.stringify({
           name: fullName,
-          email: emailAddress,
-          phone: phoneNumber,
-          specialty: specialty
+          email: emailAddress
         })
       });
       
@@ -71,8 +55,6 @@
         const user = JSON.parse(userJson);
         user.name = fullName;
         user.email = emailAddress;
-        user.phone = phoneNumber;
-        user.specialty = specialty;
         localStorage.setItem('user', JSON.stringify(user));
       }
     } catch (err: any) {
@@ -80,30 +62,6 @@
     } finally {
       isSavingProfile = false;
       setTimeout(() => profileSaveStatus = '', 4000);
-    }
-  }
-
-  async function handleAddAvailability(e: SubmitEvent) {
-    e.preventDefault();
-    if (!startTime || !endTime) {
-      availStatus = 'Please select both times.';
-      return;
-    }
-    isSavingAvail = true;
-    availStatus = '';
-    try {
-      // POST /mentor/availability expects start_time and end_time (RFC3339 formatted strings are usually fine, or JS ISO strings)
-      await apiPost('/mentor/availability', {
-        start_time: new Date(startTime).toISOString(),
-        end_time: new Date(endTime).toISOString()
-      });
-      availStatus = 'Availability added successfully!';
-      startTime = '';
-      endTime = '';
-    } catch (err: any) {
-      availStatus = err.message || 'Failed to add availability.';
-    } finally {
-      isSavingAvail = false;
     }
   }
 
@@ -171,22 +129,6 @@
           <div class="form-group">
             <label for="prof-email">Email Address</label>
             <input type="email" id="prof-email" bind:value={emailAddress} />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="prof-phone">Phone Number</label>
-            <input type="text" id="prof-phone" bind:value={phoneNumber} />
-          </div>
-          <div class="form-group">
-            <label for="prof-spec">Teaching Specialty</label>
-            <select id="prof-spec" bind:value={specialty}>
-              <option value="Classical Piano">Classical Piano</option>
-              <option value="Vocal Training">Vocal Training</option>
-              <option value="Guitar Mastery">Guitar Mastery</option>
-              <option value="Violin Intro">Violin Intro</option>
-            </select>
           </div>
         </div>
       </div>
@@ -384,220 +326,6 @@
     border-color: var(--primary);
     background-color: var(--bg-card);
     box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.1);
-  }
-
-  /* Availability Settings */
-  .avail-title-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .active-badge {
-    background-color: #e6fffa;
-    color: #319795;
-    font-size: 0.65rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-  }
-
-  .reset-link {
-    background: transparent;
-    border: none;
-    color: var(--primary);
-    font-weight: 700;
-    font-size: 0.85rem;
-    cursor: pointer;
-  }
-
-  .day-header-row {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border-color);
-    text-align: center;
-  }
-
-  .days-list {
-    display: flex;
-    flex-direction: column;
-    margin-top: 8px;
-  }
-
-  .day-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 0;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .day-row.disabled {
-    opacity: 0.55;
-  }
-
-  .day-label {
-    width: 100px;
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .slots-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-grow: 1;
-    padding-left: 20px;
-  }
-
-  .time-slot {
-    background-color: #fff5f5;
-    color: #e53e3e;
-    font-size: 0.8rem;
-    font-weight: 600;
-    padding: 6px 12px;
-    border-radius: var(--radius-sm);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid #fed7d7;
-  }
-
-  .remove-x {
-    cursor: pointer;
-    font-weight: 700;
-  }
-
-  .add-slot-btn {
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-card);
-    color: var(--text-main);
-    font-size: 0.8rem;
-    font-weight: 600;
-    padding: 6px 12px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-  }
-
-  .no-hours-text {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    font-weight: 500;
-  }
-
-  .toggle-control {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .toggle-status {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-muted);
-  }
-
-  /* Switches (Slider) */
-  .switch {
-    position: relative;
-    display: inline-block;
-    width: 44px;
-    height: 22px;
-  }
-
-  .switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-
-  .slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #cbd5e0;
-    transition: .3s;
-  }
-
-  .slider:before {
-    position: absolute;
-    content: "";
-    height: 14px;
-    width: 14px;
-    left: 4px;
-    bottom: 4px;
-    background-color: white;
-    transition: .3s;
-  }
-
-  input:checked + .slider {
-    background-color: #e53e3e;
-  }
-
-  input:checked + .slider:before {
-    transform: translateX(22px);
-  }
-
-  .slider.round {
-    border-radius: 34px;
-  }
-
-  .slider.round:before {
-    border-radius: 50%;
-  }
-
-  /* Preferences Grid split */
-  .preferences-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-  }
-
-  .preference-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-top: 1px solid var(--border-color);
-    padding-top: 16px;
-    margin-top: 4px;
-  }
-
-  .pref-text {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .pref-text .title {
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: var(--text-main);
-  }
-
-  .pref-text .desc {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .switches-col {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .pref-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-muted);
   }
 
   /* Security details */

@@ -22,16 +22,7 @@
     status: 'Upcoming' | 'In Progress' | 'Completed';
   }
 
-  interface RescheduleRequest {
-    id: number;
-    studentName: string;
-    studentEmail: string;
-    course: string;
-    requestedDateTime: string;
-  }
 
-  let scheduledClasses = $state<ScheduledClass[]>([]);
-  let rescheduleRequests = $state<RescheduleRequest[]>([]);
   let isLoading = $state(true);
   let errorMsg = $state('');
   
@@ -73,18 +64,6 @@
         };
       }
 
-      try {
-        const requestsData = await apiGet<any[]>('/mentor/reschedule-requests');
-        rescheduleRequests = (requestsData || []).map(r => ({
-          id: r.id,
-          studentName: r.student_name || 'Student',
-          studentEmail: r.student_email || '',
-          course: r.course_title || 'Course',
-          requestedDateTime: r.requested_date ? new Date(r.requested_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Unknown'
-        }));
-      } catch (e) {
-        rescheduleRequests = [];
-      }
 
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : 'Failed to load classes';
@@ -93,14 +72,6 @@
     }
   });
 
-  async function handleAcceptRequest(id: number) {
-    try {
-      await apiPost(`/mentor/reschedule-requests/${id}/accept`, {});
-      rescheduleRequests = rescheduleRequests.filter(r => r.id !== id);
-    } catch (err: any) {
-      alert(err.message || 'Failed to accept request');
-    }
-  }
 
 </script>
 
@@ -108,7 +79,7 @@
   <div class="header-row">
     <div class="header-text">
       <h2>My Classes & Requests</h2>
-      <p>Manage your teaching schedule and student reschedule requests.</p>
+      <p>Manage your teaching schedule.</p>
     </div>
     <button class="schedule-btn">
       <span><Icon name="plus" size={14} /></span> Schedule Class
@@ -194,51 +165,6 @@
       </table>
     </div>
 
-    <!-- Table 2: Student Reschedule Requests -->
-    <div class="table-card request-card">
-      <div class="card-header">
-        <h3>Student Reschedule Requests</h3>
-        <p class="subtitle">Students asking to reschedule a missed or upcoming class.</p>
-      </div>
-      <table class="classes-table">
-        <thead>
-          <tr>
-            <th>STUDENT NAME</th>
-            <th>COURSE</th>
-            <th>REQUESTED DATE & TIME</th>
-            <th style="text-align: right;">ACTIONS</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#if rescheduleRequests.length === 0}
-            <tr><td colspan="4" class="empty-cell">No pending reschedule requests.</td></tr>
-          {/if}
-          {#each rescheduleRequests as req}
-            <tr>
-              <td>
-                <div class="student-info">
-                  <span class="name">{req.studentName}</span>
-                </div>
-              </td>
-              <td>
-                <div class="course-name">{req.course}</div>
-              </td>
-              <td class="date-text" style="color: #dd6b20; font-weight: 700;">{req.requestedDateTime}</td>
-              <td style="text-align: right;">
-                <div class="actions-row">
-                  <button class="accept-btn" onclick={() => handleAcceptRequest(req.id)}>
-                    <Icon name="check" size={14} /> Accept
-                  </button>
-                  <a href={`mailto:${req.studentEmail}?subject=Rescheduling ${req.course} Class`} class="email-btn">
-                    <Icon name="mail" size={14} /> Email
-                  </a>
-                </div>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
 
   {/if}
 </div>
@@ -424,35 +350,6 @@
   .action-btn:hover, .info-btn:hover { background-color: #f7fafc; color: var(--text-main); }
   .action-btn.red:hover { background-color: #fff5f5; color: #e53e3e; border-color: #feb2b2; }
 
-  .accept-btn {
-    background-color: #48bb78;
-    color: white;
-    border: none;
-    border-radius: var(--radius-sm);
-    padding: 6px 14px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 2px 4px rgba(72, 187, 120, 0.2);
-  }
-
-  .email-btn {
-    background-color: transparent;
-    color: #4299e1;
-    border: 1px solid #4299e1;
-    border-radius: var(--radius-sm);
-    padding: 6px 14px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    text-decoration: none;
-  }
 
   .empty-cell {
     text-align: center;
