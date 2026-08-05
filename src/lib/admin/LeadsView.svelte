@@ -25,9 +25,11 @@
 
   // Student Modal state
   let showStudentModal = $state(false);
-  let studentName = $state('');
-  let studentEmail = $state('');
-  let studentCourseId = $state<number | null>(null);
+
+  // Trial Modal state
+  let showTrialModal = $state(false);
+  let trialDate = $state('');
+  let trialTime = $state('');
 
   let availableCourses = $state<{id: number, title: string}[]>([]);
 
@@ -136,10 +138,19 @@
 
   function openStudentModal(lead: Lead) {
     selectedLead = lead;
-    studentName = lead.name;
-    studentEmail = lead.email;
-    studentCourseId = availableCourses.find(c => c.title === lead.course)?.id || null;
     showStudentModal = true;
+  }
+
+  function openTrialModal(lead: Lead) {
+    selectedLead = lead;
+    trialDate = '';
+    trialTime = '';
+    showTrialModal = true;
+  }
+
+  function closeTrialModal() {
+    showTrialModal = false;
+    selectedLead = null;
   }
 
   function closeStudentModal() {
@@ -149,19 +160,17 @@
 
   async function convertToStudent(e: SubmitEvent) {
     e.preventDefault();
-    if (!selectedLead || !studentName || !studentEmail) return;
+    if (!selectedLead) return;
 
     isActionLoading = true;
-    actionMessage = 'Creating student...';
+    actionMessage = 'Converting lead to student...';
     try {
-      const res = await apiPost<any>('/admin/users', {
-        name: studentName,
-        email: studentEmail,
-        role: 'student'
-      });
+      const res = await apiPost<any>(`/admin/leads/${selectedLead.id}/convert`, {});
       
-      if (studentCourseId && res.id) {
-        await apiPost('/admin/assign', { course_id: studentCourseId, user_id: res.id }).catch(e => console.warn('Failed to assign course', e));
+      if (res && res.password) {
+        alert(`Student created successfully!\n\nEmail: ${selectedLead.email}\nTemporary Password: ${res.password}\n\nPlease share these credentials with the student.`);
+      } else {
+        alert('Student created successfully!');
       }
 
       // Optimistically mark as Contacted
@@ -173,7 +182,34 @@
         window.location.reload();
       }
     } catch (err) {
-      alert('Failed to create student: ' + (err instanceof Error ? err.message : String(err)));
+      alert('Failed to convert lead: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isActionLoading = false;
+    }
+  }
+
+  async function bookTrial(e: SubmitEvent) {
+    e.preventDefault();
+    if (!selectedLead || !trialDate || !trialTime) return;
+
+    isActionLoading = true;
+    actionMessage = 'Booking trial...';
+    try {
+      // Ensure time is in HH:MM:SS format for the backend
+      const formattedTime = trialTime.split(':').length === 2 ? `${trialTime}:00` : trialTime;
+
+      await apiPost('/admin/trials', {
+        lead_id: selectedLead.id,
+        date: trialDate,
+        time: formattedTime
+      });
+
+      const idx = leads.findIndex(l => l.id === selectedLead!.id);
+      if (idx !== -1) leads[idx].status = 'In Review';
+      closeTrialModal();
+      alert('Trial booked successfully!');
+    } catch (err) {
+      alert('Failed to book trial: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       isActionLoading = false;
     }
@@ -290,6 +326,13 @@
                 <td class="date-text">{lead.createdDate}</td>
                 <td>
                   <div style="display: flex; gap: 8px; align-items: center;">
+                    <button 
+                      class="move-to-student-btn"
+                      style="background-color: transparent; border: 1px solid #cbd5e0; color: #4a5568; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;"
+                      onclick={() => openTrialModal(lead)}
+                    >
+                      <Icon name="calendar" size={14} /> Book Trial
+                    </button>
                     <button 
                       class="move-to-student-btn"
                       style="background-color: transparent; border: 1px solid #cbd5e0; color: #4a5568; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer;"
@@ -411,29 +454,43 @@
         </div>
         <form onsubmit={convertToStudent} class="modal-form">
           <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9rem;">
-            Create a new student account for this lead.
+            Are you sure you want to convert <strong>{selectedLead?.name}</strong> into a student? This will automatically create an account for them.
           </p>
-          <div class="form-group">
-            <label for="student-name">Name</label>
-            <input type="text" id="student-name" bind:value={studentName} required />
-          </div>
-          <div class="form-group">
-            <label for="student-email">Email</label>
-            <input type="email" id="student-email" bind:value={studentEmail} required />
-          </div>
-          <div class="form-group">
-            <label for="student-course">Course</label>
-            <select id="student-course" bind:value={studentCourseId}>
-              <option value={null}>-- Select a Course --</option>
-              {#each availableCourses as course}
-                <option value={course.id}>{course.title}</option>
-              {/each}
-            </select>
-          </div>
           <div class="modal-actions">
             <button type="button" class="cancel-btn" onclick={closeStudentModal}>Cancel</button>
             <button type="submit" class="submit-btn" disabled={isActionLoading}>
-              {isActionLoading ? 'Creating...' : 'Create Student'}
+              {isActionLoading ? 'Converting...' : 'Convert to Student'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Book Trial Modal -->
+  {#if showTrialModal}
+    <div class="modal-overlay" onclick={closeTrialModal} aria-hidden="true">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+        <div class="modal-header">
+          <h3>Book Trial</h3>
+          <button class="close-btn" onclick={closeTrialModal}>&times;</button>
+        </div>
+        <form onsubmit={bookTrial} class="modal-form">
+          <p style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9rem;">
+            Schedule a trial class for <strong>{selectedLead?.name}</strong>.
+          </p>
+          <div class="form-group">
+            <label for="trial-date">Date</label>
+            <input type="date" id="trial-date" bind:value={trialDate} required />
+          </div>
+          <div class="form-group">
+            <label for="trial-time">Time</label>
+            <input type="time" id="trial-time" bind:value={trialTime} required />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="cancel-btn" onclick={closeTrialModal}>Cancel</button>
+            <button type="submit" class="submit-btn" disabled={isActionLoading}>
+              {isActionLoading ? 'Booking...' : 'Book Trial'}
             </button>
           </div>
         </form>

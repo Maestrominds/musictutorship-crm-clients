@@ -232,10 +232,12 @@
           {:else}
             {#each filteredStudents as student}
               <tr>
-                <td class="user-cell">
-                  <div class="avatar-circle">{getInitials(student.name)}</div>
-                  <div class="user-details">
-                    <span class="name">{student.name}</span>
+                <td>
+                  <div class="user-cell">
+                    <div class="avatar-circle">{getInitials(student.name)}</div>
+                    <div class="user-details">
+                      <span class="name">{student.name}</span>
+                    </div>
                   </div>
                 </td>
                 <td>
@@ -259,9 +261,11 @@
                     </span>
                   </div>
                 </td>
-                <td style="text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
-                  <button onclick={() => openEditModal(student)} style="background: #ebf8ff; border: 1px solid #bee3f8; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #2b6cb0; border-radius: 6px; transition: all 0.2s;">Edit</button>
-                  <button onclick={() => deleteStudent(student.id)} style="background: #fff5f5; border: 1px solid #fed7d7; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #e53e3e; border-radius: 6px; transition: all 0.2s;">Delete</button>
+                <td style="text-align: right;">
+                  <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button onclick={() => openEditModal(student)} style="background: #ebf8ff; border: 1px solid #bee3f8; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #2b6cb0; border-radius: 6px; transition: all 0.2s;">Edit</button>
+                    <button onclick={() => deleteStudent(student.id)} style="background: #fff5f5; border: 1px solid #fed7d7; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #e53e3e; border-radius: 6px; transition: all 0.2s;">Delete</button>
+                  </div>
                 </td>
               </tr>
             {/each}

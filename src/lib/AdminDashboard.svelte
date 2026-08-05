@@ -8,10 +8,11 @@
   import PaymentsView from './admin/PaymentsView.svelte';
   import MentorsView from './admin/MentorsView.svelte';
   import TicketsView from './admin/TicketsView.svelte';
+  import TrialsView from './admin/TrialsView.svelte';
   import SkeletonLoader from './SkeletonLoader.svelte';
   import { apiGet } from './api';
 
-  let activeSubView = $state<'dashboard' | 'leads' | 'students' | 'courses' | 'payments' | 'mentors' | 'tickets'>(
+  let activeSubView = $state<'dashboard' | 'leads' | 'trials' | 'students' | 'courses' | 'payments' | 'mentors' | 'tickets'>(
     (typeof window !== 'undefined' ? localStorage.getItem('adminActiveSubView') as any : null) || 'dashboard'
   );
   let isPageTransitioning = $state(false);
@@ -131,6 +132,7 @@
         <span class="nav-icon"><Icon name="dashboard" size={16} /></span> Dashboard
       </button>
       <button class="nav-item" class:active={activeSubView === 'leads'} onclick={() => navigateTo('leads')}><span class="nav-icon"><Icon name="users" size={16} /></span> Leads</button>
+      <button class="nav-item" class:active={activeSubView === 'trials'} onclick={() => navigateTo('trials')}><span class="nav-icon"><Icon name="calendar" size={16} /></span> Trials</button>
 
       <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => navigateTo('students')}><span class="nav-icon"><Icon name="graduation" size={16} /></span> Students</button>
       <button class="nav-item" class:active={activeSubView === 'courses'} onclick={() => navigateTo('courses')}><span class="nav-icon"><Icon name="book" size={16} /></span> Courses</button>
@@ -360,7 +362,8 @@
         </section>
       {:else if activeSubView === 'leads'}
         <LeadsView />
-
+      {:else if activeSubView === 'trials'}
+        <TrialsView />
       {:else if activeSubView === 'students'}
         <StudentsView />
       {:else if activeSubView === 'courses'}

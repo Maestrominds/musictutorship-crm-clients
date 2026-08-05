@@ -135,11 +135,7 @@
 
       if (newMentorId) {
         actionMessage = 'Assigning mentor...';
-        try {
-           await apiPost<any>('/admin/assign', { course_id: newCourseId, user_id: Number(newMentorId) });
-        } catch(assignErr) {
-           console.warn('Failed to assign mentor:', assignErr);
-        }
+        await apiPost<any>('/admin/assign', { course_id: newCourseId, user_id: Number(newMentorId) });
       }
 
       const assignedMentor = mentorsList.find(m => m.id === Number(newMentorId));
@@ -191,30 +187,27 @@
 
       if (editMentorId) {
         actionMessage = 'Updating mentor assignment...';
-        try {
-           await apiPost<any>('/admin/assign', { course_id: editCourseId, user_id: Number(editMentorId) });
-        } catch(assignErr) {
-           console.warn('Failed to assign mentor:', assignErr);
-        }
+        await apiPost<any>('/admin/assign', { course_id: editCourseId, user_id: Number(editMentorId) });
       }
+      
+      // Update local state ONLY on success
+      const assignedMentor = mentorsList.find(m => m.id === Number(editMentorId));
+      courses = courses.map(c => c.id === editCourseId ? {
+        ...c,
+        name: editName,
+        description: editDescription,
+        price: `$${editPrice}/mo`,
+        duration: editDuration,
+        mentor_name: editMentorId ? (assignedMentor ? assignedMentor.name : c.mentor_name) : c.mentor_name,
+        mentor_id: editMentorId ? Number(editMentorId) : c.mentor_id
+      } : c);
+      closeEditModal();
     } catch (err) {
-      console.warn('Backend update failed, updating locally:', err);
+      submitError = err instanceof Error ? err.message : 'Backend update failed.';
+    } finally {
+      isSubmitting = false;
+      isActionLoading = false;
     }
-
-    const assignedMentor = mentorsList.find(m => m.id === Number(editMentorId));
-
-    courses = courses.map(c => c.id === editCourseId ? {
-      ...c,
-      name: editName,
-      description: editDescription,
-      price: `$${editPrice}/mo`,
-      duration: editDuration,
-      mentor_name: editMentorId ? (assignedMentor ? assignedMentor.name : c.mentor_name) : c.mentor_name,
-      mentor_id: editMentorId ? Number(editMentorId) : c.mentor_id
-    } : c);
-    closeEditModal();
-    isSubmitting = false;
-    isActionLoading = false;
   }
 
   async function removeCourse(id: number) {
@@ -505,6 +498,7 @@
 
   .course-meta {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 16px;
   }

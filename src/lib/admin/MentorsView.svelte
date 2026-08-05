@@ -249,9 +249,11 @@
                     {mentor.student_count || 0}
                   </span>
                 </td>
-                <td style="text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
-                  <button onclick={() => openEditModal(mentor)} style="background: #ebf8ff; border: 1px solid #bee3f8; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #2b6cb0; border-radius: 6px; transition: all 0.2s;">Edit</button>
-                  <button onclick={() => deleteMentor(mentor.id)} style="background: #fff5f5; border: 1px solid #fed7d7; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #e53e3e; border-radius: 6px; transition: all 0.2s;">Delete</button>
+                <td style="text-align: right;">
+                  <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button onclick={() => openEditModal(mentor)} style="background: #ebf8ff; border: 1px solid #bee3f8; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #2b6cb0; border-radius: 6px; transition: all 0.2s;">Edit</button>
+                    <button onclick={() => deleteMentor(mentor.id)} style="background: #fff5f5; border: 1px solid #fed7d7; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 6px 12px; color: #e53e3e; border-radius: 6px; transition: all 0.2s;">Delete</button>
+                  </div>
                 </td>
               </tr>
             {/each}
