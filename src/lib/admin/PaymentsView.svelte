@@ -29,7 +29,7 @@
         amount: `$${p.amount}`,
         rawAmount: Number(p.amount) || 0,
         paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
-        status: (p.status || 'paid').toLowerCase()
+        status: (p.status || 'pending').toLowerCase()
       }));
     } catch {
       payments = []; // Not yet available — show empty state

@@ -140,6 +140,14 @@
 
       const assignedMentor = mentorsList.find(m => m.id === Number(newMentorId));
 
+      // If the mentor was teaching another course, clear them from it in local state
+      courses = courses.map(c => {
+        if (newMentorId && c.mentor_id === Number(newMentorId)) {
+          return { ...c, mentor_name: undefined, mentor_id: undefined };
+        }
+        return c;
+      });
+
       courses = [...courses, {
         id: newCourseId,
         name: newName,
@@ -163,11 +171,8 @@
     if (!editCourseId || !editName || !editDescription) return;
 
     if (editMentorId) {
-      const isMentorAlreadyAssigned = courses.some(c => c.mentor_id === Number(editMentorId) && c.id !== editCourseId);
-      if (isMentorAlreadyAssigned) {
-        submitError = 'This mentor is already assigned to another course. A mentor can only teach one course.';
-        return;
-      }
+      // We will allow the backend upsert to handle this. We just need to clear this mentor
+      // from any previous course in our local state later.
     }
 
     isSubmitting = true;
@@ -192,15 +197,26 @@
       
       // Update local state ONLY on success
       const assignedMentor = mentorsList.find(m => m.id === Number(editMentorId));
-      courses = courses.map(c => c.id === editCourseId ? {
-        ...c,
-        name: editName,
-        description: editDescription,
-        price: `$${editPrice}/mo`,
-        duration: editDuration,
-        mentor_name: editMentorId ? (assignedMentor ? assignedMentor.name : c.mentor_name) : c.mentor_name,
-        mentor_id: editMentorId ? Number(editMentorId) : c.mentor_id
-      } : c);
+      
+      courses = courses.map(c => {
+        // If this is the course we just edited
+        if (c.id === editCourseId) {
+          return {
+            ...c,
+            name: editName,
+            description: editDescription,
+            price: `$${editPrice}/mo`,
+            duration: editDuration,
+            mentor_name: editMentorId ? (assignedMentor ? assignedMentor.name : c.mentor_name) : c.mentor_name,
+            mentor_id: editMentorId ? Number(editMentorId) : c.mentor_id
+          };
+        }
+        // If this mentor was teaching another course, they are now removed from it (because 1 mentor = 1 course)
+        if (editMentorId && c.mentor_id === Number(editMentorId)) {
+          return { ...c, mentor_name: undefined, mentor_id: undefined };
+        }
+        return c;
+      });
       closeEditModal();
     } catch (err) {
       submitError = err instanceof Error ? err.message : 'Backend update failed.';

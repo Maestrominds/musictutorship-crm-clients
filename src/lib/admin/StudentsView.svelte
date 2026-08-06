@@ -147,23 +147,35 @@
         method: 'PUT',
         body: JSON.stringify({ name: editName, email: editEmail })
       });
-      if (editCourseId && editCourseId !== students.find(s => s.id === editStudentId)?.course_id) {
-        await apiPost('/admin/assign', { course_id: editCourseId, user_id: editStudentId });
+      
+      const originalCourseId = students.find(s => s.id === editStudentId)?.course_id;
+      if (editCourseId && editCourseId !== originalCourseId) {
+        if (originalCourseId) {
+          // If they already had a course, we must PATCH to update it
+          await apiFetch('/admin/assign', {
+            method: 'PATCH',
+            body: JSON.stringify({ course_id: editCourseId, user_id: editStudentId })
+          });
+        } else {
+          // If they didn't have a course, we use POST to create it
+          await apiPost('/admin/assign', { course_id: editCourseId, user_id: editStudentId });
+        }
       }
+
+      let assignedCourseName = courses.find(c => c.id === editCourseId)?.name;
+      students = students.map(s => s.id === editStudentId ? { 
+        ...s, 
+        name: editName, 
+        email: editEmail,
+        course_id: editCourseId || undefined,
+        course_name: assignedCourseName || s.course_name
+      } : s);
+      closeEditModal();
     } catch (err) {
-      console.warn('Backend update failed, updating locally:', err);
+      alert('Backend update failed: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      isActionLoading = false;
     }
-    
-    let assignedCourseName = courses.find(c => c.id === editCourseId)?.name;
-    students = students.map(s => s.id === editStudentId ? { 
-      ...s, 
-      name: editName, 
-      email: editEmail,
-      course_id: editCourseId || undefined,
-      course_name: assignedCourseName || s.course_name
-    } : s);
-    closeEditModal();
-    isActionLoading = false;
   }
 
   async function deleteStudent(id: number) {
@@ -298,7 +310,7 @@
           </div>
           <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
             <label for="edit-course" style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">Assign Course</label>
-            <select id="edit-course" bind:value={editCourseId} disabled={students.find(s => s.id === editStudentId)?.course_id != null} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; background: white;">
+            <select id="edit-course" bind:value={editCourseId} style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; background: white;">
               <option value={null}>-- Select a Course --</option>
               {#each courses as course}
                 <option value={course.id}>{course.name}</option>

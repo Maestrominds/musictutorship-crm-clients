@@ -165,13 +165,9 @@
     isActionLoading = true;
     actionMessage = 'Converting lead to student...';
     try {
-      const res = await apiPost<any>(`/admin/leads/${selectedLead.id}/convert`, {});
+      await apiPost<any>(`/admin/leads/${selectedLead.id}/convert`, {});
       
-      if (res && res.password) {
-        alert(`Student created successfully!\n\nEmail: ${selectedLead.email}\nTemporary Password: ${res.password}\n\nPlease share these credentials with the student.`);
-      } else {
-        alert('Student created successfully!');
-      }
+      alert(`Student created successfully!\n\nLogin credentials have been automatically emailed to ${selectedLead.email}.`);
 
       // Optimistically mark as Contacted
       const idx = leads.findIndex(l => l.id === selectedLead!.id);
