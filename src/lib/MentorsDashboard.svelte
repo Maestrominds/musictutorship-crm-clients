@@ -3,8 +3,6 @@
   import Icon from './Icon.svelte';
   import MentorDashboardView from './mentor/MentorDashboardView.svelte';
   import MentorStudentsView from './mentor/MentorStudentsView.svelte';
-  import MentorClassesView from './mentor/MentorClassesView.svelte';
-  import MentorAttendanceView from './mentor/MentorAttendanceView.svelte';
   import MentorProfileView from './mentor/MentorProfileView.svelte';
   import MentorSupportView from './mentor/MentorSupportView.svelte';
   import MentorCoursesView from './mentor/MentorCoursesView.svelte';
@@ -13,7 +11,7 @@
   
   let { data } = $props<{ data: any }>();
 
-  let activeSubView = $state<'dashboard' | 'courses' | 'course_detail' | 'students' | 'classes' | 'attendance' | 'profile' | 'support'>(
+  let activeSubView = $state<'dashboard' | 'courses' | 'course_detail' | 'students' | 'profile' | 'support'>(
     (typeof window !== 'undefined' ? localStorage.getItem('mentorActiveSubView') as any : null) || 'dashboard'
   );
   let activeCourseId = $state<number | null>(null);
@@ -79,12 +77,6 @@
       <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => navigateTo('students')}>
         <span class="nav-icon"><Icon name="users" size={16} /></span> My Students
       </button>
-      <button class="nav-item" class:active={activeSubView === 'classes'} onclick={() => navigateTo('classes')}>
-        <span class="nav-icon"><Icon name="calendar" size={16} /></span> My Classes
-      </button>
-      <button class="nav-item" class:active={activeSubView === 'attendance'} onclick={() => navigateTo('attendance')}>
-        <span class="nav-icon"><Icon name="clipboard" size={16} /></span> Attendance
-      </button>
       <button class="nav-item" class:active={activeSubView === 'support'} onclick={() => navigateTo('support')}>
         <span class="nav-icon"><Icon name="message-square" size={16} /></span> Support Tickets
       </button>
@@ -131,10 +123,6 @@
         <MentorCourseDetailView courseId={activeCourseId} courseTitle={activeCourseTitle} goBack={() => navigateTo('courses')} />
       {:else if activeSubView === 'students'}
         <MentorStudentsView />
-      {:else if activeSubView === 'classes'}
-        <MentorClassesView />
-      {:else if activeSubView === 'attendance'}
-        <MentorAttendanceView />
       {:else if activeSubView === 'support'}
         <MentorSupportView />
       {:else if activeSubView === 'profile'}

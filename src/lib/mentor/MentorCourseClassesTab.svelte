@@ -183,8 +183,7 @@
 
   {:else if error}
     <div class="empty-state">
-      <p>⚠️ {error}</p>
-      <p class="hint">Backend needed: <code>GET /api/mentor/courses/{courseId}/classes</code></p>
+      <p>⚠️ Unable to load classes. Please try again later.</p>
     </div>
 
   {:else}
