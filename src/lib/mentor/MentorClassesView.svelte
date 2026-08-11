@@ -26,6 +26,9 @@
   let isLoading = $state(true);
   let errorMsg = $state('');
   
+  let { courseId } = $props<{ courseId?: number }>();
+  let scheduledClasses = $state<ScheduledClass[]>([]);
+  
   // Stats State
   let stats = $state({
     total_classes: 0,
@@ -54,7 +57,11 @@
         apiGet<ApiClass[]>('/mentor/classes').catch(() => []),
         apiGet<any>('/mentor/stats').catch(() => null)
       ]);
-      scheduledClasses = (classesData || []).map(mapApiClass);
+      let filteredClasses = classesData || [];
+      if (courseId) {
+        filteredClasses = filteredClasses.filter(c => c.course_assignment_id === courseId);
+      }
+      scheduledClasses = filteredClasses.map(mapApiClass);
       
       if (statsData) {
         stats = {

@@ -16,11 +16,13 @@
     type: string;
     sender_id: number;
     message: string;
-    timestamp: string;
+    timestamp?: string;
+    created_at?: string;
   }
 
   let tickets = $state<Ticket[]>([]);
   let isLoading = $state(true);
+  let ticketLoadError = $state('');
   
   // Create Modal
   let showCreateModal = $state(false);
@@ -35,6 +37,8 @@
   let newMessage = $state('');
   let ws: WebSocket | null = null;
   let isChatLoading = $state(false);
+  let chatLoadError = $state('');
+  let wsDisconnected = $state(false);
   let currentUserId = 0;
 
   onMount(async () => {
@@ -49,7 +53,8 @@
       const data = await apiGet<Ticket[]>('/student/tickets');
       tickets = data || [];
     } catch (err) {
-      // Backend endpoint might not exist yet
+      console.warn('Failed to load tickets:', err);
+      ticketLoadError = 'Unable to load your support tickets. Please refresh the page.';
       tickets = [];
     } finally {
       isLoading = false;
@@ -89,6 +94,8 @@
     showChatModal = true;
     isChatLoading = true;
     chatMessages = [];
+    chatLoadError = '';
+    wsDisconnected = false;
 
     try {
       const pastMessages = await apiGet<any[]>(`/tickets/${ticketId}/messages`);
@@ -97,6 +104,7 @@
       }
     } catch (err) {
       console.warn('Failed to load messages:', err);
+      chatLoadError = 'Could not load previous messages. You can still send new messages below.';
     } finally {
       isChatLoading = false;
     }
@@ -117,11 +125,21 @@
         console.error('WS message error', e);
       }
     };
+
+    ws.onerror = () => {
+      wsDisconnected = true;
+    };
+
+    ws.onclose = () => {
+      wsDisconnected = true;
+    };
   }
 
   function closeChat() {
     showChatModal = false;
     activeTicketId = null;
+    wsDisconnected = false;
+    chatLoadError = '';
     if (ws) {
       ws.close();
       ws = null;
@@ -130,7 +148,12 @@
 
   function sendMessage(e: Event) {
     e.preventDefault();
-    if (!newMessage.trim() || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!newMessage.trim()) return;
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      wsDisconnected = true;
+      return;
+    }
 
     const payload = {
       type: 'message',
@@ -166,6 +189,12 @@
 
   {#if isLoading}
     <div class="loading-state">Loading tickets...</div>
+  {:else if ticketLoadError}
+    <div class="error-banner">
+      <span>⚠️</span>
+      <span>{ticketLoadError}</span>
+      <button onclick={() => window.location.reload()} class="retry-link">Refresh Page</button>
+    </div>
   {:else if tickets.length === 0}
     <div class="empty-state">
       <Icon name="inbox" size={48} />
@@ -239,6 +268,11 @@
           {#if isChatLoading}
             <div class="loading-state">Loading messages...</div>
           {:else}
+            {#if chatLoadError}
+              <div class="chat-notice">
+                ⚠️ {chatLoadError}
+              </div>
+            {/if}
             <!-- Original Request Bubble -->
             {#if tickets.find(t => t.id === activeTicketId)?.description}
               <div class="chat-message my-message">
@@ -263,9 +297,14 @@
             {/each}
           {/if}
         </div>
+        {#if wsDisconnected}
+          <div class="ws-error-banner">
+            🔌 Connection lost. Please close and reopen the chat to reconnect.
+          </div>
+        {/if}
         <form class="chat-input-area" onsubmit={sendMessage}>
-          <input type="text" bind:value={newMessage} placeholder="Type your message..." />
-          <button type="submit" class="send-btn" disabled={!newMessage.trim()}><Icon name="send" size={16} /></button>
+          <input type="text" bind:value={newMessage} placeholder="Type your message..." disabled={wsDisconnected} />
+          <button type="submit" class="send-btn" disabled={!newMessage.trim() || wsDisconnected}><Icon name="send" size={16} /></button>
         </form>
       </div>
     </div>
@@ -514,5 +553,52 @@
     cursor: not-allowed;
     background: #cbd5e0;
     box-shadow: none;
+  }
+
+  /* Error states */
+  .error-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    color: #c53030;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+
+  .retry-link {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid #c53030;
+    color: #c53030;
+    border-radius: var(--radius-sm);
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .chat-notice {
+    background: #fffaf0;
+    border: 1px solid #feebc8;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    color: #744210;
+    margin-bottom: 8px;
+  }
+
+  .ws-error-banner {
+    background: #fff5f5;
+    border-top: 1px solid #fed7d7;
+    padding: 10px 20px;
+    font-size: 0.85rem;
+    color: #c53030;
+    font-weight: 500;
+    text-align: center;
   }
 </style>

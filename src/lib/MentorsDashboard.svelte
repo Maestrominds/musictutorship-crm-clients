@@ -7,18 +7,29 @@
   import MentorAttendanceView from './mentor/MentorAttendanceView.svelte';
   import MentorProfileView from './mentor/MentorProfileView.svelte';
   import MentorSupportView from './mentor/MentorSupportView.svelte';
+  import MentorCoursesView from './mentor/MentorCoursesView.svelte';
+  import MentorCourseDetailView from './mentor/MentorCourseDetailView.svelte';
   import SkeletonLoader from './SkeletonLoader.svelte';
+  
   let { data } = $props<{ data: any }>();
 
-  let activeSubView = $state<'dashboard' | 'students' | 'classes' | 'attendance' | 'profile' | 'support'>(
+  let activeSubView = $state<'dashboard' | 'courses' | 'course_detail' | 'students' | 'classes' | 'attendance' | 'profile' | 'support'>(
     (typeof window !== 'undefined' ? localStorage.getItem('mentorActiveSubView') as any : null) || 'dashboard'
   );
+  let activeCourseId = $state<number | null>(null);
+  let activeCourseTitle = $state<string>('');
   let isPageTransitioning = $state(false);
 
   function navigateTo(view: typeof activeSubView) {
     if (view === activeSubView) return;
     isPageTransitioning = true;
     setTimeout(() => { activeSubView = view; isPageTransitioning = false; }, 180);
+  }
+
+  function openCourse(courseId: number, courseTitle: string) {
+    activeCourseId = courseId;
+    activeCourseTitle = courseTitle;
+    navigateTo('course_detail');
   }
 
   $effect(() => {
@@ -61,6 +72,9 @@
     <nav class="nav-menu">
       <button class="nav-item" class:active={activeSubView === 'dashboard'} onclick={() => navigateTo('dashboard')}>
         <span class="nav-icon"><Icon name="dashboard" size={16} /></span> Mentor Dashboard
+      </button>
+      <button class="nav-item" class:active={activeSubView === 'courses' || activeSubView === 'course_detail'} onclick={() => navigateTo('courses')}>
+        <span class="nav-icon"><Icon name="book" size={16} /></span> My Courses
       </button>
       <button class="nav-item" class:active={activeSubView === 'students'} onclick={() => navigateTo('students')}>
         <span class="nav-icon"><Icon name="users" size={16} /></span> My Students
@@ -111,6 +125,10 @@
         <SkeletonLoader type="table" rows={5} cols={4} />
       {:else if activeSubView === 'dashboard'}
         <MentorDashboardView />
+      {:else if activeSubView === 'courses'}
+        <MentorCoursesView {openCourse} />
+      {:else if activeSubView === 'course_detail' && activeCourseId}
+        <MentorCourseDetailView courseId={activeCourseId} courseTitle={activeCourseTitle} goBack={() => navigateTo('courses')} />
       {:else if activeSubView === 'students'}
         <MentorStudentsView />
       {:else if activeSubView === 'classes'}

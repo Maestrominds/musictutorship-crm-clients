@@ -17,6 +17,7 @@
 
   let payments = $state<Payment[]>([]);
   let isLoading = $state(true);
+  let loadError = $state('');
 
   // Backend: GET /admin/payments returns GetAdminPaymentsRow { id, student_name, course_title, amount, created_at }
   onMount(async () => {
@@ -31,8 +32,10 @@
         paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
         status: (p.status || 'pending').toLowerCase()
       }));
-    } catch {
-      payments = []; // Not yet available — show empty state
+    } catch (err) {
+      console.error('Failed to load payments:', err);
+      loadError = 'Unable to load payment records. Please refresh the page.';
+      payments = [];
     } finally {
       isLoading = false;
     }
@@ -83,6 +86,12 @@
 <div class="payments-view">
   {#if isLoading}
     <SkeletonLoader type="table" rows={6} cols={3} />
+  {:else if loadError}
+    <div class="error-banner">
+      <span>⚠️</span>
+      <span>{loadError}</span>
+      <button onclick={() => window.location.reload()} class="retry-btn">Retry</button>
+    </div>
   {:else}
 
   <div class="header-row">
@@ -368,5 +377,30 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     font-weight: 500;
+  }
+
+  .error-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    color: #c53030;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .retry-btn {
+    margin-left: auto;
+    background: #e53e3e;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
   }
 </style>

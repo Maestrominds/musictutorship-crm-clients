@@ -21,6 +21,8 @@
   let activeClass = $state<ActiveClass | null>(null);
   let classRoster = $state<MentorStudent[]>([]);
   let isLoading = $state(true);
+  
+  let { courseId } = $props<{ courseId?: number }>();
   let isSaving = $state(false);
   let saveMessage = $state('');
 
@@ -37,12 +39,16 @@
         status: 'Absent' // Default all to Absent as per requirements
       }));
 
-      // Mock Active Class
-      activeClass = {
-        id: 101,
-        course_title: "Classical Piano Group A",
-        scheduled_at: new Date().toISOString()
-      };
+      // Try to fetch active class for this course from backend
+      try {
+        const classData = await apiGet<any>(courseId ? `/mentor/courses/${courseId}/active-class` : '/mentor/active-class');
+        if (classData) {
+          activeClass = classData;
+        }
+      } catch (err) {
+        console.warn("Could not fetch active class, using null");
+        activeClass = null;
+      }
 
     } catch {
       classRoster = [];

@@ -13,6 +13,7 @@
 
   let paymentsList = $state<StudentPayment[]>([]);
   let isLoading = $state(true);
+  let errorMsg = $state('');
 
   // Backend: GET /student/payments returns Payment model { id, student_id, course_id, amount, created_at }
   // Note: no course_title or status field in the Payment model.
@@ -27,6 +28,7 @@
       }));
     } catch (err) {
       console.error('Failed to load payments:', err);
+      errorMsg = 'Unable to load your payment history. Please refresh the page or try again later.';
     } finally {
       isLoading = false;
     }
@@ -52,6 +54,12 @@
   <!-- Stats cards -->
   {#if isLoading}
     <SkeletonLoader type="table" rows={6} cols={3} />
+  {:else if errorMsg}
+    <div class="error-banner">
+      <span class="error-icon">⚠️</span>
+      <span>{errorMsg}</span>
+      <button class="retry-btn" onclick={() => window.location.reload()}>Retry</button>
+    </div>
   {:else}
     <div class="stats-row">
       <div class="stat-card">
@@ -282,5 +290,32 @@
     font-size: 0.85rem;
     color: var(--text-muted);
     font-weight: 500;
+  }
+
+  .error-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    color: #c53030;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .error-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+  .retry-btn {
+    margin-left: auto;
+    background: #e53e3e;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
   }
 </style>

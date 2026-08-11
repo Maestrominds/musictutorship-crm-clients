@@ -19,6 +19,7 @@
   let upcomingSessions = $state<{ id: number; title: string; instructor: string; date: string; time: string; isActionable: boolean }[]>([]);
   let dailyGoal = $state({ minutes: 0, target: 60, progress_pct: 0 });
   let isLoading = $state(true);
+  let errorMsg = $state('');
 
   // GET /api/student/courses returns GetStudentCoursesListRow { id, course_title, mentor_name, progress_percent, total_lessons, completed_lessons }
   onMount(async () => {
@@ -56,8 +57,10 @@
           };
         }
       }
-    } catch {
-      inProgressCourses = []; // Not yet available — show empty state
+    } catch (err) {
+      console.error('Failed to load courses:', err);
+      inProgressCourses = [];
+      errorMsg = 'Unable to load your courses. Please refresh the page.';
     } finally {
       isLoading = false;
     }
@@ -67,6 +70,12 @@
 <div class="student-courses-view">
   {#if isLoading}
     <SkeletonLoader type="cards" rows={4} />
+  {:else if errorMsg}
+    <div class="error-banner">
+      <span class="error-icon">⚠️</span>
+      <span>{errorMsg}</span>
+      <button class="retry-btn" onclick={() => window.location.reload()}>Retry</button>
+    </div>
   {:else}
   <div class="header-row">
     <div class="header-text">
@@ -497,5 +506,32 @@
 
   @media (max-width: 768px) {
     .bottom-grid { grid-template-columns: 1fr; }
+  }
+
+  .error-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    color: #c53030;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .error-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+  .retry-btn {
+    margin-left: auto;
+    background: #e53e3e;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
   }
 </style>

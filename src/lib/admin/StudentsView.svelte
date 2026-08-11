@@ -27,6 +27,7 @@
   // Action state
   let isActionLoading = $state(false);
   let actionMessage = $state('');
+  let warningMsg = $state(''); // For non-fatal warnings like assignment failure
 
   let searchQuery = $state('');
 
@@ -116,6 +117,8 @@
           assignedCourseName = courses.find(c => c.id === newCourseId)?.name;
         } catch (err) {
           console.warn('Failed to assign course:', err);
+          warningMsg = `Student "${newStudentName}" was created, but course assignment failed. Please assign the course manually from the edit menu.`;
+          setTimeout(() => { warningMsg = ''; }, 7000);
         }
       }
 
@@ -203,6 +206,13 @@
     <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.7); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; color: #e53e3e; gap: 10px;">
       <div style="width: 30px; height: 30px; border: 3px solid rgba(229, 62, 62, 0.3); border-top-color: #e53e3e; border-radius: 50%; animation: spin 1s infinite linear;"></div>
       <div>{actionMessage}</div>
+    </div>
+  {/if}
+
+  {#if warningMsg}
+    <div style="display: flex; align-items: center; gap: 12px; background: #fffaf0; border: 1px solid #feebc8; border-radius: 8px; padding: 14px 20px; color: #744210; font-size: 0.9rem; font-weight: 500; margin-bottom: 16px;">
+      <span style="font-size: 1.2rem; flex-shrink: 0;">⚠️</span>
+      <span>{warningMsg}</span>
     </div>
   {/if}
 

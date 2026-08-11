@@ -15,12 +15,19 @@
 
   let students = $state<MentorStudent[]>([]);
   let isLoading = $state(true);
+  
+  let { courseId } = $props<{ courseId?: number }>();
 
   // GET /api/mentor/students returns GetMentorStudentsListRow { id, name, email, course_title, progress_percent, next_class_at }
   onMount(async () => {
     try {
       const data = await apiGet<any[]>('/mentor/students');
-      students = (data || []).map(s => ({
+      let filteredData = data || [];
+      if (courseId) {
+        // Assume API or frontend handles filtering by course_id
+        filteredData = filteredData.filter(s => s.course_id === courseId || s.course_assignment_id === courseId);
+      }
+      students = filteredData.map(s => ({
         id: s.id,
         name: s.name,
         email: s.email,
