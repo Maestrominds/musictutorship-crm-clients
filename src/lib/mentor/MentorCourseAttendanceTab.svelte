@@ -84,11 +84,9 @@
   async function loadStudentsForClass(classId: number | null) {
     isRosterLoading = true;
     try {
-      const studs = await apiGet<any[]>(`/mentor/courses/${courseId}/students`).catch(async () => {
-        // fallback
-        return await apiGet<any[]>('/mentor/students') || [];
-      });
-      roster = (studs || []).map(s => ({
+      // Use the dedicated per-course endpoint — now live on the backend
+      const studs = await apiGet<any[]>(`/mentor/courses/${courseId}/students`) || [];
+      roster = studs.map(s => ({
         id: s.id,
         name: s.name,
         email: s.email,
@@ -135,7 +133,7 @@
           })
         )
       );
-      saveMessage = `Attendance saved for ${roster.length} student${roster.length !== 1 ? 's' : ''}!`;
+      saveMessage = `Attendance saved for ${roster.length} student${roster.length !== 1 ? 's' : ''}! You can safely re-save if needed.`;
       saveSuccess = true;
     } catch (err: any) {
       saveMessage = err?.message || 'Failed to save attendance. Check backend.';

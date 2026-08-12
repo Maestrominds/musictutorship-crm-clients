@@ -14,7 +14,14 @@
     course_assignment_id: number;
   }
 
+  interface CourseStudent {
+    id: number;
+    name: string;
+    email: string;
+  }
+
   let classes = $state<CourseClass[]>([]);
+  let students = $state<CourseStudent[]>([]);
   let isLoading = $state(true);
   let error = $state('');
 
@@ -23,27 +30,20 @@
   let modalDate = $state('');
   let modalTime = $state('');
   let modalIsCatchup = $state(false);
+  let modalStudentId = $state<number | null>(null);
   let isScheduling = $state(false);
   let scheduleError = $state('');
   let scheduleSuccess = $state('');
 
   onMount(async () => {
-    await loadClasses();
+    await Promise.all([loadClasses(), loadStudents()]);
   });
 
   async function loadClasses() {
     isLoading = true;
     error = '';
     try {
-      // When backend is ready: GET /mentor/courses/:id/classes
-      let data: CourseClass[] = [];
-      try {
-        data = await apiGet<CourseClass[]>(`/mentor/courses/${courseId}/classes`) || [];
-      } catch {
-        // Fallback: all classes filtered by course_assignment_id (won't work perfectly without backend, but keeps UI alive)
-        const all = await apiGet<CourseClass[]>('/mentor/classes') || [];
-        data = all.filter(c => c.course_assignment_id === courseId);
-      }
+      const data = await apiGet<CourseClass[]>(`/mentor/courses/${courseId}/classes`) || [];
       classes = data.sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
     } catch (err: any) {
       error = err?.message || 'Failed to load classes';
@@ -52,9 +52,24 @@
     }
   }
 
+  async function loadStudents() {
+    try {
+      const data = await apiGet<CourseStudent[]>(`/mentor/courses/${courseId}/students`) || [];
+      students = data;
+      // Pre-select the first student if only one
+      if (data.length === 1) modalStudentId = data[0].id;
+    } catch {
+      students = [];
+    }
+  }
+
   async function scheduleClass() {
     if (!modalDate || !modalTime) {
       scheduleError = 'Please select both a date and time.';
+      return;
+    }
+    if (!modalStudentId) {
+      scheduleError = 'Please select a student to schedule this class for.';
       return;
     }
     isScheduling = true;
@@ -64,19 +79,22 @@
     const scheduledAt = new Date(`${modalDate}T${modalTime}:00`).toISOString();
 
     try {
+      // New API contract: send student_id instead of course_id
+      // Backend resolves the student's active course and verifies the mentor teaches it.
       await apiPost('/mentor/classes/schedule', {
-        course_id: courseId,
+        student_id: modalStudentId,
         scheduled_at: scheduledAt,
         is_catchup: modalIsCatchup,
       });
-      scheduleSuccess = 'Class scheduled successfully! Students will be notified by email.';
+      scheduleSuccess = 'Class scheduled! The student will be notified by email.';
       modalDate = '';
       modalTime = '';
       modalIsCatchup = false;
+      modalStudentId = students.length === 1 ? students[0].id : null;
       await loadClasses();
-      setTimeout(() => { showModal = false; scheduleSuccess = ''; }, 2000);
+      setTimeout(() => { showModal = false; scheduleSuccess = ''; }, 2200);
     } catch (err: any) {
-      scheduleError = err?.message || 'Failed to schedule class. Check backend.';
+      scheduleError = err?.message || 'Failed to schedule class. Please try again.';
     } finally {
       isScheduling = false;
     }
@@ -93,6 +111,16 @@
       + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
+  function openModal() {
+    scheduleError = '';
+    scheduleSuccess = '';
+    modalDate = '';
+    modalTime = '';
+    modalIsCatchup = false;
+    modalStudentId = students.length === 1 ? students[0].id : null;
+    showModal = true;
+  }
+
   function closeModal() {
     showModal = false;
     scheduleError = '';
@@ -100,6 +128,7 @@
     modalDate = '';
     modalTime = '';
     modalIsCatchup = false;
+    modalStudentId = null;
   }
 
   let upcoming = $derived(classes.filter(c => getStatus(c.scheduled_at) === 'upcoming'));
@@ -122,6 +151,25 @@
       </div>
 
       <div class="modal-body">
+        <!-- Student Selector -->
+        <div class="form-group">
+          <label for="class-student">Student</label>
+          {#if students.length === 0}
+            <div class="no-students-msg">⚠️ No students enrolled in this course yet.</div>
+          {:else}
+            <select
+              id="class-student"
+              bind:value={modalStudentId}
+              class="student-select"
+            >
+              <option value={null} disabled>— Select a student —</option>
+              {#each students as s}
+                <option value={s.id}>{s.name} ({s.email})</option>
+              {/each}
+            </select>
+          {/if}
+        </div>
+
         <div class="form-group">
           <label for="class-date">Date</label>
           <input id="class-date" type="date" bind:value={modalDate} min={minDate} />
@@ -154,7 +202,7 @@
 
       <div class="modal-footer">
         <button class="cancel-btn" onclick={closeModal} disabled={isScheduling}>Cancel</button>
-        <button class="submit-btn" onclick={scheduleClass} disabled={isScheduling}>
+        <button class="submit-btn" onclick={scheduleClass} disabled={isScheduling || students.length === 0}>
           {#if isScheduling}
             <span class="spinner"></span> Scheduling...
           {:else}
@@ -173,7 +221,7 @@
       <h3>Classes</h3>
       <p>Manage scheduled classes for this course.</p>
     </div>
-    <button class="schedule-btn" onclick={() => showModal = true}>
+    <button class="schedule-btn" onclick={openModal}>
       <Icon name="plus" size={15} /> Schedule Class
     </button>
   </div>
@@ -195,7 +243,7 @@
       </div>
       {#if upcoming.length === 0}
         <div class="no-items">
-          No upcoming classes. <button class="link-btn" onclick={() => showModal = true}>Schedule one now →</button>
+          No upcoming classes. <button class="link-btn" onclick={openModal}>Schedule one now →</button>
         </div>
       {:else}
         <div class="class-list">
@@ -494,7 +542,8 @@
   }
 
   .form-group input[type="date"],
-  .form-group input[type="time"] {
+  .form-group input[type="time"],
+  .form-group .student-select {
     border: 1.5px solid var(--border-color);
     border-radius: 8px;
     padding: 10px 14px;
@@ -503,9 +552,20 @@
     background: var(--bg-card);
     outline: none;
     transition: border-color 0.15s;
+    width: 100%;
   }
 
-  .form-group input:focus { border-color: var(--primary); }
+  .form-group input:focus,
+  .form-group .student-select:focus { border-color: var(--primary); }
+
+  .no-students-msg {
+    font-size: 0.85rem;
+    color: #c05621;
+    background: #fffaf0;
+    border: 1px solid #feebc8;
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
 
   .checkbox-group { flex-direction: row; align-items: flex-start; }
 

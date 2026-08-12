@@ -21,16 +21,7 @@
 
   onMount(async () => {
     try {
-      // When backend is ready: GET /mentor/courses/:id/students
-      // Falls back to global /mentor/students filtered by course_id
-      let data: any[] = [];
-      try {
-        data = await apiGet<CourseStudent[]>(`/mentor/courses/${courseId}/students`) || [];
-      } catch {
-        // Fallback: get all students and filter
-        const all = await apiGet<any[]>('/mentor/students') || [];
-        data = all.filter(s => s.course_id === courseId || s.course_assignment_id === courseId);
-      }
+      const data = await apiGet<CourseStudent[]>(`/mentor/courses/${courseId}/students`) || [];
       students = data.map(s => ({
         id: s.id,
         name: s.name,
@@ -91,8 +82,10 @@
 
   {:else if error}
     <div class="empty-state error">
-      <p>⚠️ {error}</p>
-      <p class="hint">Backend needed: <code>GET /api/mentor/courses/{courseId}/students</code></p>
+      <div class="empty-icon">⚠️</div>
+      <h4>Unable to Load Students</h4>
+      <p>{error}</p>
+      <p>Please try refreshing the page or contact your administrator.</p>
     </div>
 
   {:else if filtered.length === 0}
@@ -104,8 +97,7 @@
       {:else}
         <div class="empty-icon">👥</div>
         <h4>No Students Enrolled</h4>
-        <p>No active students found for this course. The admin needs to assign students.</p>
-        <p class="hint">Backend needed: <code>GET /api/mentor/courses/{courseId}/students</code></p>
+        <p>No active students found for this course. Please contact your administrator to enroll students.</p>
       {/if}
     </div>
 
